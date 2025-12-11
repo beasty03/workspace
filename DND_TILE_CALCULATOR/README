@@ -1,0 +1,42 @@
+TODO:
+
+- add zoom in buttons
+
+- pictures
+
+- total of tiles needed
+
+- total of boards needed
+
+- cool logo
+
+- more types of tiles
+
+  - ground or walls
+    - cave entrance
+    - bridge
+  - sizes
+    - 2x2
+    - 2x1
+    - 3x1
+
+- other types of boards
+
+  - 5x5
+  - 1x3
+
+- other types of misc
+
+  - chairs
+  - bush
+
+- view function (removes buttons to have a better view)
+
+- phone interface
+
+- way to save presets (json file possible to read?)
+
+  - import and export function
+
+- ez way to share presets
+  - is share button possible
