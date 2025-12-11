@@ -1,41 +1,34 @@
 # TODO List
 
-* add zoom in buttons *(done)*
-* pictures
-* total of tiles needed *(done)*
-* total of boards needed *(done)*
-* cool logo
-* more types of tiles
-
-  * ground or walls
-
-    * cave entrance
-    * bridge
-    * stair
-  * sizes
-
-    * 2x2
-    * 2x1
-    * 3x1
-* add a toggle button to say a block is highground
-* other types of boards *(done)*
-
-  * 5x5
-  * 1x3
-  * 3x1
-  * 1x5
-  * 5x1
-  * *(fix: make it so that there is no space between 2 boards if possible)*
-* other types of misc
-
-  * chairs
-  * bush
-  * rock
-* view function (removes buttons to have a better view)
-* phone interface
-* way to save presets (JSON file? readable?)
-
-  * import and export function
-* easy way to share presets
-
-  * share button possible?
+- add zoom in buttons *(done)*
+- pictures
+- total of tiles needed *(done)*
+- total of boards needed *(done)*
+- cool logo
+- more types of tiles
+  - ground or walls
+    - cave entrance
+    - bridge
+    - stair
+  - sizes
+    - 2x2
+    - 2x1
+    - 3x1
+- add a toggle button to say a block is highground
+- other types of boards *(done)*
+  - 5x5
+  - 1x3
+  - 3x1
+  - 1x5
+  - 5x1
+  - *(fix: make it so that there is no space between 2 boards if possible)*
+- other types of misc
+  - chairs
+  - bush
+  - rock
+- view function (removes buttons to have a better view)
+- phone interface
+- way to save presets (JSON file? readable?)
+  - import and export function
+- easy way to share presets
+  - share button possible?
