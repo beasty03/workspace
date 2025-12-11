@@ -8,6 +8,7 @@
       :root {
         --cell: 36px;
         --gap: 0;
+        --zoom: 1;
         /* flush boards */
         --bg: #0f1221;
         --panel: #171a2e;
@@ -372,6 +373,36 @@
       .board-clear-btn:hover {
         border-color: var(--accent);
       }
+
+      .zoom-controls {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+
+      .zoom-btn {
+        background: #232747;
+        border: 1px solid #2f3563;
+        padding: 6px 10px;
+        border-radius: 8px;
+        cursor: pointer;
+        color: white;
+      }
+
+      .boards-wrap {
+        overflow: auto;
+        min-height: 60vh;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        /* NEW: allow scaling */
+      }
+
+      #zoomContainer {
+        transform: scale(var(--zoom));
+        transform-origin: top center;
+      }
     </style>
   </head>
 
@@ -401,6 +432,9 @@
         </div>
 
         <div class="palette" id="palette"></div>
+
+        <h2 style="margin-top: 16px">Board size</h2>
+        <div class="palette" id="boardPalette"></div>
         <div class="legend tip">
           Left‑drag to paint. Left‑click a placed tile to rotate it 90° (only
           that tile). Right‑click to clear.<br />
@@ -412,13 +446,49 @@
 
       <!-- Boards -->
       <section class="panel boards-wrap">
-        <div id="boardsGrid" class="boards-grid" aria-label="Boards grid"></div>
+        <div
+          class="zoom-controls"
+          style="
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            z-index: 10;
+            display: flex;
+            gap: 8px;
+          "
+        >
+          <button class="zoom-btn" id="zoomOut">➖</button>
+          <button class="zoom-btn" id="zoomIn">➕</button>
+          <button class="zoom-btn" id="zoomReset">🔄</button>
+        </div>
+        <div
+          id="zoomContainer"
+          style="transform: scale(var(--zoom)); transform-origin: top center"
+        >
+          <div
+            id="boardsGrid"
+            class="boards-grid"
+            aria-label="Boards grid"
+          ></div>
+        </div>
       </section>
-
       <!-- Counts -->
       <aside class="panel">
         <h2>number of tiles</h2>
         <div id="counts" class="counts"></div>
+
+        <div
+          id="globalCounters"
+          style="
+            margin-top: 12px;
+            text-align: right;
+            font-size: 13px;
+            color: var(--muted);
+          "
+        >
+          <div>Total tiles: <b id="totalTiles">0</b></div>
+          <div>Total boards: <b id="totalBoards">0</b></div>
+        </div>
       </aside>
     </main>
 
@@ -429,7 +499,39 @@
     </div>
 
     <script>
+      /* Zoom Logic */
+      let zoomLevel = 1;
+
+      function applyZoom() {
+        document.documentElement.style.setProperty("--zoom", zoomLevel);
+      }
+
+      document.getElementById("zoomIn").onclick = () => {
+        zoomLevel = Math.min(3, zoomLevel + 0.1);
+        applyZoom();
+      };
+
+      document.getElementById("zoomOut").onclick = () => {
+        zoomLevel = Math.max(0.3, zoomLevel - 0.1);
+        applyZoom();
+      };
+
+      document.getElementById("zoomReset").onclick = () => {
+        zoomLevel = 1;
+        applyZoom();
+      };
+
       // ---------- TILE DEFINITIONS WITH CATEGORIES ----------
+
+      const BOARD_SHAPES = [
+        { id: "b1x3", w: 1, h: 3, name: "1×3" },
+        { id: "b3x1", w: 3, h: 1, name: "3×1" },
+        { id: "b3x3", w: 3, h: 3, name: "3×3" },
+        { id: "b1x5", w: 1, h: 5, name: "1×5" },
+        { id: "b5x1", w: 5, h: 1, name: "5×1" },
+        { id: "b5x5", w: 5, h: 5, name: "5×5" },
+      ];
+
       const TILES = [
         // Ground
         {
@@ -471,7 +573,7 @@
           name: "Wall - Straight",
           glyph: "I",
           rotatable: true,
-          color: "#f38ba8",
+          color: "#FFFFFF",
           category: "wall",
         },
         {
@@ -479,7 +581,7 @@
           name: "Wall - Corner",
           glyph: "L",
           rotatable: true,
-          color: "#f38ba8",
+          color: "#FFFFFF",
           category: "wall",
         },
         {
@@ -487,7 +589,7 @@
           name: "Wall - Opening",
           glyph: "U",
           rotatable: true,
-          color: "#f38ba8",
+          color: "#FFFFFF",
           category: "wall",
         },
 
@@ -525,7 +627,7 @@
           category: "road",
         },
 
-        // Misc (roads + a marker)
+        // Misc
         {
           id: "tree",
           name: "tree",
@@ -583,6 +685,8 @@
           category: "misc",
         },
       ];
+
+      let selectedBoardShape = BOARD_SHAPES[2]; // default 3×3
       // ---------- OPTIONAL IMAGE VERSION (COMMENTED) ----------
       /*
     const TILES = [
@@ -635,16 +739,25 @@
       const keyOf = (x, y) => `${x},${y}`;
       const parseKey = (k) => k.split(",").map(Number);
 
-      function createEmptyBoard() {
-        return Array.from({ length: BOARD_SIZE }, () =>
-          Array(BOARD_SIZE).fill(null)
+      function createEmptyBoard(w, h) {
+        return Array.from({ length: h }, () =>
+          Array.from({ length: w }, () => null)
         );
       }
 
       function addBoardAt(x, y) {
         const k = keyOf(x, y);
         if (placement.has(k)) return;
-        placement.set(k, { id: nextBoardId++, tiles: createEmptyBoard() });
+
+        const { w, h } = selectedBoardShape;
+
+        placement.set(k, {
+          id: nextBoardId++,
+          w,
+          h,
+          tiles: createEmptyBoard(w, h),
+        });
+
         creationStack.push(k);
         renderBoards();
       }
@@ -664,6 +777,8 @@
           buildPalette();
         });
       });
+
+      buildBoardPalette();
 
       // Palette build (filtered by category)
       function buildPalette() {
@@ -703,6 +818,36 @@
 
           paletteEl.appendChild(btn);
         }
+      }
+
+      function buildBoardPalette() {
+        const wrap = document.getElementById("boardPalette");
+        wrap.innerHTML = "";
+
+        BOARD_SHAPES.forEach((shape) => {
+          const btn = document.createElement("button");
+          btn.className =
+            "tile" + (shape.id === selectedBoardShape.id ? " selected" : "");
+          btn.style.height = "40px";
+
+          const content = document.createElement("div");
+          content.className = "content";
+          content.style.background = "#0f132a";
+          content.style.border = "1px solid #2b315e";
+          content.style.borderRadius = "8px";
+          content.textContent = shape.name;
+
+          btn.appendChild(content);
+
+          btn.addEventListener("click", () => {
+            selectedBoardShape = shape;
+            document
+              .querySelectorAll("#boardPalette .tile")
+              .forEach((el) => el.classList.toggle("selected", el === btn));
+          });
+
+          wrap.appendChild(btn);
+        });
       }
 
       // Boards render (grid aligned by coordinate extents, but flush spacing)
@@ -750,10 +895,13 @@
 
             const grid = document.createElement("div");
             grid.className = "board-grid";
+            grid.style.gridTemplateColumns = `repeat(${boardData.w}, var(--cell))`;
             boardEl.appendChild(grid);
 
-            for (let r = 0; r < BOARD_SIZE; r++) {
-              for (let c = 0; c < BOARD_SIZE; c++) {
+            const { w, h } = boardData;
+
+            for (let r = 0; r < h; r++) {
+              for (let c = 0; c < w; c++) {
                 const cellEl = document.createElement("div");
                 cellEl.className = "cell";
                 cellEl.dataset.empty = boardData.tiles[r][c] ? "false" : "true";
@@ -954,8 +1102,8 @@
         if (!boardData) return;
 
         // Wipe all 3×3 cells
-        for (let r = 0; r < BOARD_SIZE; r++) {
-          for (let c = 0; c < BOARD_SIZE; c++) {
+        for (let r = 0; r < boardData.h; r++) {
+          for (let c = 0; c < boardData.w; c++) {
             boardData.tiles[r][c] = null;
           }
         }
@@ -967,7 +1115,7 @@
           // Repaint every cell of this board
           for (let r = 0; r < BOARD_SIZE; r++) {
             for (let c = 0; c < BOARD_SIZE; c++) {
-              const cellIdx = r * BOARD_SIZE + c;
+              const cellIdx = r * boardData.w + c;
               const cellEl = grid.children[cellIdx];
               renderCellContent(k, r, c, cellEl);
             }
@@ -1005,7 +1153,7 @@
         const boardEl = boardsGrid.querySelector(`[data-coord="${k}"]`);
         if (!boardEl) return;
         const grid = boardEl.querySelector(".board-grid");
-        const cellIdx = r * BOARD_SIZE + c;
+        const cellIdx = r * boardData.w + c;
         const cellEl = grid.children[cellIdx];
         renderCellContent(k, r, c, cellEl);
       }
@@ -1090,6 +1238,13 @@
           const items = groups[cat] || [];
           countsEl.appendChild(makeGroup(cat, items, INITIAL_COLLAPSED[cat]));
         });
+
+        // --- Global counters ---
+        let totalTiles = 0;
+        for (const qty of byId.values()) totalTiles += qty;
+
+        document.getElementById("totalTiles").textContent = totalTiles;
+        document.getElementById("totalBoards").textContent = placement.size;
       }
 
       // Save / Load / Export
