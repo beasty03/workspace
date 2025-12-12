@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Board Planner — Mobile</title>
+  <style>
+    :root {
+      /* Layout & scale */
+      --cell: clamp(32px, 8vw, 56px); /* responsive cell size for phones */
+      --gap: 2px;                     /* tighter gap for small screens */
+      --zoom: 1;                      /* dynamic zoom for pinch/buttons */
+
+      /* Theme (Dark) */
+      --bg: #0f1221;
+      --panel: #171a2e;
+      --fg: #e6e8f2;
+      --muted: #9aa3b2;
+      --accent: #6aa3ff;
+      --border: #232747;
+      --btn: #232747;
+      --btn-border: #2f3563;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--fg);
+      font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      margin: 0;
+    }
+
+    /* Sticky header for mobile */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 10px 12px;
+      background: #0b0e1a;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 {
+      font-size: 15px;
+      margin: 0 0 8px;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .toolbar .wide { grid-column: span 3; }
+
+    button, .seg-btn {
+      background: var(--btn);
+      color: var(--fg);
+      border: 1px solid var(--btn-border);
+      padding: 10px 12px; /* bigger touch targets */
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    button:active, .seg-btn:active { transform: translateY(1px); }
+    button:hover { border-color: var(--accent); }
+
+    main {
+      display: grid;
+      grid-template-columns: 1fr; /* single column on phones */
+      gap: 10px;
+      padding: 10px;
+    }
+
+    /* Two columns for tablets/landscape */
+    @media (min-width: 900px) {
+      main { grid-template-columns: 320px 1fr; }
+      aside.panel { grid-column: 1; }
+      section.boards-wrap { grid-column: 2; }
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px;
+    }
+    .panel h2 {
+      margin: 0 0 10px;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    /* Category switcher */
+    .category-switch {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .cat-btn {
+      background: var(--btn);
+      color: var(--fg);
+      border: 1px solid var(--btn-border);
+      padding: 8px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .cat-btn.active {
+      border-color: var(--accent);
+      background: #263066;
+    }
+
+    /* Palette */
+    .palette {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .tile {
+      height: 64px; /* bigger for touch */
+      border-radius: 10px;
+      border: 2px solid transparent;
+      cursor: pointer;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .tile.selected { border-color: var(--accent); }
+    .glyph { font-weight: 800; font-size: 22px; line-height: 1; display: inline-block; }
+    .tile-name { position: absolute; bottom: 6px; left: 8px; font-size: 11px; color: var(--muted); }
+
+    /* Boards layout */
+    .boards-wrap {
+      overflow: auto;
+      min-height: 50vh; /* compact yet usable */
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: pan-y; /* allow vertical scroll, custom horizontal painting */
+    }
+    #zoomContainer {
+      transform: scale(var(--zoom));
+      transform-origin: top center;
+    }
+
+    .boards-grid {
+      display: grid;
+      gap: var(--gap);
+      justify-content: center;
+      align-content: center;
+      place-items: center;
+    }
+
+    .board {
+      background: #0a0d1a;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px;
+      position: relative;
+      width: max-content;
+    }
+    .board-grid {
+      display: grid;
+      grid-template-columns: repeat(3, var(--cell));
+      gap: var(--gap);
+      touch-action: none; /* enable drag paint */
+    }
+
+    .cell {
+      width: var(--cell);
+      height: var(--cell);
+      background: #141830;
+      border: 1px solid #1d2242;
+      border-radius: 8px;
+      position: relative;
+      user-select: none;
+    }
+    .cell[data-empty="true"] {
+      background: transparent;
+      border: 1px dashed #2a315f;
+    }
+    .content {
+      position: absolute;
+      inset: 2px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .content .glyph { font-size: 20px; }
+    .rotation-dot {
+      position: absolute;
+      top: 4px; right: 6px;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--muted);
+      opacity: 0.45;
+    }
+
+    /* Edge controls */
+    .edge-btn {
+      position: absolute;
+      width: 28px; height: 28px; /* bigger touch target */
+      border-radius: 50%;
+      background: var(--btn);
+      border: 1px solid var(--btn-border);
+      color: var(--fg);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      font-weight: 800; font-size: 16px; line-height: 1;
+      transition: border-color 0.15s ease;
+      z-index: 2;
+    }
+    .edge-btn:hover { border-color: var(--accent); }
+    .edge-top    { top: -14px; left: 50%; transform: translateX(-50%); }
+    .edge-right  { right: -14px; top: 50%; transform: translateY(-50%); }
+    .edge-bottom { bottom: -14px; left: 50%; transform: translateX(-50%); }
+    .edge-left   { left: -14px; top: 50%; transform: translateY(-50%); }
+
+    .legend { margin-top: 8px; color: var(--muted); }
+
+    /* Collapsible counts */
+    .counts { font-variant-numeric: tabular-nums; }
+    .count-group { border: 1px solid #2a2f55; border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
+    .count-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; cursor: pointer; background: #1a1f39; color: #e6e8f2; }
+    .count-header .title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+    .count-header .toggle { font-size: 16px; font-weight: 800; width: 20px; text-align: center; color: #9aa3b2; }
+    .count-body { padding: 8px 10px; background: #131733; display: block; }
+    .count-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed #2a2f55; }
+    .count-row:last-child { border-bottom: 0; }
+    .is-collapsed .count-body { display: none; }
+
+    .footer { padding: 12px 16px; color: var(--muted); }
+
+    /* Mode switch (Paint / Erase) */
+    .segmented {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .seg-btn.active { border-color: var(--accent); background: #263066; }
+
+    .board-clear-btn {
+      position: absolute; top: 6px; right: 6px;
+      width: 26px; height: 26px; border-radius: 50%;
+      background: var(--btn); border: 1px solid var(--btn-border);
+      color: #e6e8f2; font-weight: 800; font-size: 14px; line-height: 1;
+      display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 3;
+    }
+    .board-clear-btn:hover { border-color: var(--accent); }
+
+    .zoom-controls { display: flex; gap: 8px; position: absolute; top: 8px; right: 12px; z-index: 10; }
+    .zoom-btn { background: var(--btn); border: 1px solid var(--btn-border); padding: 10px 12px; border-radius: 8px; cursor: pointer; color: white; }
+
+    .board-spacer { width: 0; height: 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Modular Tile Planner — Mobile</h1>
+    <div class="toolbar">
+      <button id="exportCsv">📤 CSV</button>
+      <button id="exportJson">📤 JSON</button>
+      <button id="clear" class="wide">🗑️ Clear All</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Palette -->
+    <section class="panel">
+      <h2>Tiles</h2>
+      <div class="category-switch">
+        <button class="cat-btn active" data-cat="ground">Ground</button>
+        <button class="cat-btn" data-cat="road">Road</button>
+        <button class="cat-btn" data-cat="wall">Walls</button>
+        <button class="cat-btn" data-cat="misc">Misc</button>
+      </div>
+      <div class="palette" id="palette"></div>
+
+      <h2 style="margin-top: 16px">Board size</h2>
+      <div class="palette" id="boardPalette"></div>
+
+      <div class="segmented">
+        <button id="modePaint" class="seg-btn active" type="button">🎨 Paint</button>
+        <button id="modeErase" class="seg-btn" type="button">🧽 Erase</button>
+      </div>
+
+      <div class="legend">
+        Tap empty cell to **place**. Tap filled cell to **rotate** 90°. Drag to paint continuously. Switch to **Erase** mode to remove tiles.
+      </div>
+    </section>
+
+    <!-- Boards -->
+    <section class="panel boards-wrap">
+      <div class="zoom-controls">
+        <button class="zoom-btn" id="zoomOut">➖</button>
+        <button class="zoom-btn" id="zoomIn">➕</button>
+        <button class="zoom-btn" id="zoomReset">🔄</button>
+      </div>
+      <div id="zoomContainer">
+        <div id="boardsGrid" class="boards-grid" aria-label="Boards grid"></div>
+      </div>
+    </section>
+
+    <!-- Counts -->
+    <aside class="panel">
+      <h2>Counts</h2>
+      <div id="counts" class="counts"></div>
+      <div id="globalCounters" style="margin-top: 12px; text-align: right; font-size: 13px; color: var(--muted);">
+        <div>Total tiles: <b id="totalTiles">0</b></div>
+        <div>Total boards: <b id="totalBoards">0</b></div>
+      </div>
+    </aside>
+  </main>
+
+  <div class="footer">For best results, serve over <code>http(s)</code> (e.g., local server) rather than <code>file://</code> for downloads.
+    <!-- IMAGE VERSION is supported by swapping glyphs for images; see commented section in script. -->
+  </div>
+
+  <script>
+    /* Zoom Logic + Pinch */
+    let zoomLevel = 1;
+    const htmlRoot = document.documentElement;
+    function applyZoom() { htmlRoot.style.setProperty("--zoom", zoomLevel); }
+    document.getElementById("zoomIn").onclick = () => { zoomLevel = Math.min(3, zoomLevel + 0.1); applyZoom(); };
+    document.getElementById("zoomOut").onclick = () => { zoomLevel = Math.max(0.4, zoomLevel - 0.1); applyZoom(); };
+    document.getElementById("zoomReset").onclick = () => { zoomLevel = 1; applyZoom(); };
+
+    // Simple pinch-to-zoom (two pointers adjusting scale)
+    const activePointers = new Map();
+    const boardsWrap = document.querySelector('.boards-wrap');
+    let pinchStartDist = null, startZoom = 1;
+    boardsWrap.addEventListener('pointerdown', (e) => { activePointers.set(e.pointerId, {x: e.clientX, y: e.clientY}); boardsWrap.setPointerCapture(e.pointerId); });
+    boardsWrap.addEventListener('pointermove', (e) => {
+      if (!activePointers.has(e.pointerId)) return;
+      activePointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
+      if (activePointers.size === 2) {
+        const pts = [...activePointers.values()];
+        const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+        if (pinchStartDist == null) { pinchStartDist = dist; startZoom = zoomLevel; }
+        const scale = dist / pinchStartDist;
+        zoomLevel = Math.min(3, Math.max(0.4, startZoom * scale));
+        applyZoom();
+      }
+    }, {passive: true});
+    boardsWrap.addEventListener('pointerup', (e) => { activePointers.delete(e.pointerId); if (activePointers.size < 2) pinchStartDist = null; });
+    boardsWrap.addEventListener('pointercancel', (e) => { activePointers.delete(e.pointerId); if (activePointers.size < 2) pinchStartDist = null; });
+
+    // --- TILE & BOARD DEFINITIONS (glyph version) ---
+    const BOARD_SHAPES = [
+      { id: "b1x3", w: 1, h: 3, name: "1×3" },
+      { id: "b3x1", w: 3, h: 1, name: "3×1" },
+      { id: "b3x3", w: 3, h: 3, name: "3×3" },
+      { id: "b1x5", w: 1, h: 5, name: "1×5" },
+      { id: "b5x1", w: 5, h: 1, name: "5×1" },
+      { id: "b5x5", w: 5, h: 5, name: "5×5" },
+    ];
+    const TILES = [
+      // Ground
+      { id: "sand",  name: "Sand",  glyph: "S", rotatable: false, color: "#e5c07b", category: "ground" },
+      { id: "grass", name: "Grass", glyph: "G", rotatable: false, color: "#26a269", category: "ground" },
+      { id: "stone", name: "Stone", glyph: "O", rotatable: false, color: "#77767b", category: "ground" },
+      { id: "cave",  name: "Cave",  glyph: "C", rotatable: false, color: "#5a4a6f", category: "ground" },
+      // Walls
+      { id: "wall_straight",  name: "Wall - Straight", glyph: "I", rotatable: true, color: "#FFFFFF", category: "wall" },
+      { id: "wall_corner",    name: "Wall - Corner",   glyph: "L", rotatable: true, color: "#FFFFFF", category: "wall" },
+      { id: "wall_opening",   name: "Wall - Opening",  glyph: "U", rotatable: true, color: "#FFFFFF", category: "wall" },
+      // Roads
+      { id: "straight_road", name: "Road - Straight", glyph: "I", rotatable: true, color: "#f38ba8", category: "road" },
+      { id: "corner",         name: "Road - Corner",   glyph: "L", rotatable: true, color: "#f38ba8", category: "road" },
+      { id: "road_t",         name: "Road - T",        glyph: "T", rotatable: true, color: "#f38ba8", category: "road" },
+      { id: "intersection",   name: "Road - Cross",    glyph: "+", rotatable: false, color: "#f38ba8", category: "road" },
+      // Misc
+      { id: "tree",   name: "Tree",   glyph: "T", rotatable: true,  color: "#3a7", category: "misc" },
+      { id: "barrel", name: "Barrel", glyph: "B", rotatable: true,  color: "#e79", category: "misc" },
+      { id: "table",  name: "Table",  glyph: "T", rotatable: true,  color: "#7ad", category: "misc" },
+      { id: "statue", name: "Statue", glyph: "+", rotatable: false, color: "#ccc", category: "misc" },
+      { id: "marker", name: "Marker", glyph: "•", rotatable: false, color: "#ddd", category: "misc" },
+      { id: "chest",  name: "Chest",  glyph: "C", rotatable: false, color: "#ddd", category: "misc" },
+      { id: "door",   name: "Door",   glyph: "D", rotatable: true,  color: "#f38ba8", category: "misc" },
+    ];
+
+    let selectedBoardShape = BOARD_SHAPES[2]; // default 3×3
+
+    /* Optional IMAGE VERSION (commented)
+    const TILES = [
+      { id: "sand", name: "Sand", img: "./assets/sand.png", rotatable: false, category: "ground" },
+      // ...
+    ];
+    */
+
+    // --- CONFIG ---
+    const STORAGE_KEY = "tilePlanner.coords.v5.mobile"; // new key
+
+    // --- STATE ---
+    const placement = new Map(); // key "x,y" -> { id, w, h, tiles }
+    const creationStack = [];    // LIFO for last generated board
+    let nextBoardId = 1;
+    let selectedTileId = TILES[0].id;
+    let selectedCategory = "ground";
+    let isDragging = false;
+    let dragMode = "paint"; // "paint" | "erase"
+    let lastPaintKey = null;
+    let activePointerId = null; // single drag pointer for painting
+
+    // --- DOM ---
+    const paletteEl = document.getElementById("palette");
+    const boardsGrid = document.getElementById("boardsGrid");
+    const countsEl = document.getElementById("counts");
+    const catButtons = document.querySelectorAll(".cat-btn");
+    const boardPaletteWrap = document.getElementById("boardPalette");
+
+    const keyOf = (x, y) => `${x},${y}`;
+    const parseKey = (k) => k.split(",").map(Number);
+
+    function createEmptyBoard(w, h) {
+      return Array.from({ length: h }, () => Array.from({ length: w }, () => null));
+    }
+
+    function addBoardAt(x, y) {
+      const k = keyOf(x, y);
+      if (placement.has(k)) return;
+      const { w, h } = selectedBoardShape;
+      placement.set(k, { id: nextBoardId++, w, h, tiles: createEmptyBoard(w, h) });
+      creationStack.push(k);
+      renderBoards();
+    }
+
+    function removeLastBoard() {
+      if (creationStack.length <= 1) return; // keep root
+      const k = creationStack.pop();
+      placement.delete(k);
+      renderBoards();
+    }
+
+    // Category switching
+    catButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        selectedCategory = btn.dataset.cat;
+        catButtons.forEach((b) => b.classList.toggle("active", b === btn));
+        buildPalette();
+      });
+    });
+
+    buildBoardPalette();
+
+    function buildPalette() {
+      const items = TILES.filter((t) => t.category === selectedCategory);
+      paletteEl.innerHTML = "";
+      for (const t of items) {
+        const btn = document.createElement("button");
+        btn.className = "tile" + (t.id === selectedTileId ? " selected" : "");
+        btn.title = t.name;
+        const content = document.createElement("div");
+        content.className = "content";
+        content.style.background = "#0f132a";
+        content.style.border = "1px solid #2b315e";
+        content.style.borderRadius = "8px";
+        const glyph = document.createElement("span");
+        glyph.className = "glyph";
+        glyph.textContent = t.glyph ?? "•";
+        glyph.style.color = t.color ?? "#ddd";
+        content.appendChild(glyph);
+        const label = document.createElement("div");
+        label.className = "tile-name";
+        label.textContent = t.name;
+        btn.appendChild(content);
+        btn.appendChild(label);
+        btn.addEventListener("click", () => {
+          selectedTileId = t.id;
+          document.querySelectorAll(".tile").forEach((el) => el.classList.toggle("selected", el === btn));
+        });
+        paletteEl.appendChild(btn);
+      }
+    }
+
+    function buildBoardPalette() {
+      const wrap = boardPaletteWrap;
+      wrap.innerHTML = "";
+      BOARD_SHAPES.forEach((shape) => {
+        const btn = document.createElement("button");
+        btn.className = "tile" + (shape.id === selectedBoardShape.id ? " selected" : "");
+        btn.style.height = "48px";
+        const content = document.createElement("div");
+        content.className = "content";
+        content.style.background = "#0f132a";
+        content.style.border = "1px solid #2b315e";
+        content.style.borderRadius = "8px";
+        content.textContent = shape.name;
+        btn.appendChild(content);
+        btn.addEventListener("click", () => {
+          selectedBoardShape = shape;
+          document.querySelectorAll("#boardPalette .tile").forEach((el) => el.classList.toggle("selected", el === btn));
+        });
+        wrap.appendChild(btn);
+      });
+    }
+
+    // Boards render (grid aligned by coord extents)
+    function renderBoards() {
+      boardsGrid.innerHTML = "";
+      const keys = [...placement.keys()];
+      if (keys.length === 0) return;
+      const coords = keys.map(parseKey);
+      const xs = coords.map(([x]) => x), ys = coords.map(([, y]) => y);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      const cols = maxX - minX + 1;
+      boardsGrid.style.gridTemplateColumns = `repeat(${cols}, max-content)`;
+
+      for (let gy = minY; gy <= maxY; gy++) {
+        for (let gx = minX; gx <= maxX; gx++) {
+          const k = keyOf(gx, gy);
+          if (!placement.has(k)) {
+            const spacer = document.createElement("div");
+            spacer.className = "board-spacer";
+            boardsGrid.appendChild(spacer);
+            continue;
+          }
+          const boardData = placement.get(k);
+          const boardEl = document.createElement("div");
+          boardEl.className = "board";
+          boardEl.dataset.coord = k;
+          boardsGrid.appendChild(boardEl);
+
+          // Per-board clear
+          const clearBtn = document.createElement("button");
+          clearBtn.className = "board-clear-btn";
+          clearBtn.type = "button";
+          clearBtn.title = "Clear this board";
+          clearBtn.textContent = "🗑";
+          clearBtn.addEventListener("click", () => clearBoardAt(k));
+          boardEl.appendChild(clearBtn);
+
+          const grid = document.createElement("div");
+          grid.className = "board-grid";
+          grid.style.gridTemplateColumns = `repeat(${boardData.w}, var(--cell))`;
+          boardEl.appendChild(grid);
+
+          const { w, h } = boardData;
+          for (let r = 0; r < h; r++) {
+            for (let c = 0; c < w; c++) {
+              const cellEl = document.createElement("div");
+              cellEl.className = "cell";
+              cellEl.dataset.empty = boardData.tiles[r][c] ? "false" : "true";
+              const content = document.createElement("div");
+              content.className = "content";
+              cellEl.appendChild(content);
+              const dot = document.createElement("div");
+              dot.className = "rotation-dot";
+              content.appendChild(dot);
+
+              // Pointer events (mobile-friendly)
+              cellEl.addEventListener("pointerdown", (e) => {
+                e.preventDefault();
+                activePointerId = e.pointerId;
+                const hasTile = !!boardData.tiles[r][c];
+                isDragging = true;
+                if (!hasTile && dragMode === "paint") {
+                  paintAt(k, r, c);
+                } else if (hasTile && dragMode === "paint") {
+                  // rotate existing tile on tap
+                  rotateCell(k, r, c);
+                } else if (dragMode === "erase") {
+                  eraseAt(k, r, c);
+                }
+              });
+
+              // While dragging across cells
+              cellEl.addEventListener("pointerenter", (e) => {
+                if (!isDragging) return;
+                if (activePointerId != null && e.pointerId !== activePointerId) return;
+                if (dragMode === "paint") {
+                  paintAt(k, r, c);
+                } else if (dragMode === "erase") {
+                  eraseAt(k, r, c);
+                }
+              });
+
+              grid.appendChild(cellEl);
+              renderCellContent(k, r, c, cellEl);
+            }
+          }
+
+          // Edge controls
+          const hasTop = placement.has(keyOf(gx, gy - 1));
+          const hasRight = placement.has(keyOf(gx + 1, gy));
+          const hasBottom = placement.has(keyOf(gx, gy + 1));
+          const hasLeft = placement.has(keyOf(gx - 1, gy));
+
+          if (!hasTop) {
+            const btnTop = document.createElement("div");
+            btnTop.className = "edge-btn edge-top";
+            btnTop.textContent = "+";
+            btnTop.title = "Add board above";
+            btnTop.addEventListener("click", () => addBoardAt(gx, gy - 1));
+            boardEl.appendChild(btnTop);
+          }
+          const btnRight = document.createElement("div");
+          btnRight.className = "edge-btn edge-right";
+          btnRight.textContent = hasRight ? "−" : "+";
+          btnRight.title = hasRight ? "Remove last generated board" : "Add board to the right";
+          btnRight.addEventListener("click", () => { hasRight ? removeLastBoard() : addBoardAt(gx + 1, gy); });
+          boardEl.appendChild(btnRight);
+
+          const btnBottom = document.createElement("div");
+          btnBottom.className = "edge-btn edge-bottom";
+          btnBottom.textContent = hasBottom ? "−" : "+";
+          btnBottom.title = hasBottom ? "Remove last generated board" : "Add board below";
+          btnBottom.addEventListener("click", () => { hasBottom ? removeLastBoard() : addBoardAt(gx, gy + 1); });
+          boardEl.appendChild(btnBottom);
+
+          if (!hasLeft) {
+            const btnLeft = document.createElement("div");
+            btnLeft.className = "edge-btn edge-left";
+            btnLeft.textContent = "+";
+            btnLeft.title = "Add board to the left";
+            btnLeft.addEventListener("click", () => addBoardAt(gx - 1, gy));
+            boardEl.appendChild(btnLeft);
+          }
+        }
+      }
+      updateCounts();
+    }
+
+    function renderCellContent(k, r, c, cellEl) {
+      const content = cellEl.firstChild;
+      content.innerHTML = "";
+      const boardData = placement.get(k);
+      const data = boardData.tiles[r][c];
+      if (!data) { cellEl.dataset.empty = "true"; return; }
+      cellEl.dataset.empty = "false";
+      const tile = TILES.find((t) => t.id === data.id);
+      if (!tile) return;
+      const glyph = document.createElement("span");
+      glyph.className = "glyph";
+      glyph.textContent = tile.glyph ?? "•";
+      glyph.style.color = tile.color ?? "#ddd";
+      glyph.style.transform = `rotate(${data.rot}deg)`;
+      content.appendChild(glyph);
+      const dot = document.createElement("div");
+      dot.className = "rotation-dot";
+      dot.style.transform = `rotate(${data.rot}deg)`;
+      content.appendChild(dot);
+
+      /* IMAGE VERSION (commented)
+      const img = document.createElement("img");
+      img.src = tile.img;
+      img.alt = tile.name;
+      img.style.width = "100%";
+      img.style.height = "100%";
+      img.style.objectFit = "contain";
+      img.style.transform = `rotate(${data.rot}deg)`;
+      content.appendChild(img);
+      */
+    }
+
+    function paintAt(k, r, c) {
+      const boardData = placement.get(k);
+      const existing = boardData.tiles[r][c];
+      if (existing) return; // don't overwrite
+      const key = `${k}_${r}_${c}_${selectedTileId}`;
+      if (lastPaintKey === key) return;
+      setCell(k, r, c, selectedTileId, 0);
+      lastPaintKey = key;
+    }
+
+    function eraseAt(k, r, c) {
+      const boardData = placement.get(k);
+      if (!boardData.tiles[r][c]) return;
+      const key = `${k}_${r}_${c}_erase`;
+      if (lastPaintKey === key) return;
+      clearCell(k, r, c);
+      lastPaintKey = key;
+    }
+
+    function clearBoardAt(k) {
+      const boardData = placement.get(k);
+      if (!boardData) return;
+      for (let r = 0; r < boardData.h; r++) {
+        for (let c = 0; c < boardData.w; c++) {
+          boardData.tiles[r][c] = null;
+        }
+      }
+      const boardEl = boardsGrid.querySelector(`[data-coord="${k}"]`);
+      if (boardEl) {
+        const grid = boardEl.querySelector(".board-grid");
+        for (let r = 0; r < boardData.h; r++) {
+          for (let c = 0; c < boardData.w; c++) {
+            const cellIdx = r * boardData.w + c;
+            const cellEl = grid.children[cellIdx];
+            renderCellContent(k, r, c, cellEl);
+          }
+        }
+      }
+      updateCounts();
+    }
+
+    function setCell(k, r, c, id, rot) {
+      const boardData = placement.get(k);
+      boardData.tiles[r][c] = { id, rot };
+      rerenderCellByCoordKey(k, r, c);
+      updateCounts();
+    }
+
+    function clearCell(k, r, c) {
+      const boardData = placement.get(k);
+      boardData.tiles[r][c] = null;
+      rerenderCellByCoordKey(k, r, c);
+      updateCounts();
+    }
+
+    function rotateCell(k, r, c) {
+      const boardData = placement.get(k);
+      const cell = boardData.tiles[r][c];
+      if (!cell) return;
+      const tile = TILES.find((t) => t.id === cell.id);
+      if (!tile || !tile.rotatable) return;
+      cell.rot = (cell.rot + 90) % 360;
+      setCell(k, r, c, cell.id, cell.rot);
+    }
+
+    function rerenderCellByCoordKey(k, r, c) {
+      const boardEl = boardsGrid.querySelector(`[data-coord="${k}"]`);
+      if (!boardEl) return;
+      const boardData = placement.get(k);
+      const grid = boardEl.querySelector(".board-grid");
+      const cellIdx = r * boardData.w + c;
+      const cellEl = grid.children[cellIdx];
+      renderCellContent(k, r, c, cellEl);
+    }
+
+    // Counts
+    const CATEGORY_LABELS = { ground: "Ground", road: "Road", wall: "Walls", misc: "Misc" };
+    function makeGroup(catId, items, collapsed = false) {
+      const group = document.createElement("div");
+      group.className = "count-group" + (collapsed ? " is-collapsed" : "");
+      const header = document.createElement("div"); header.className = "count-header";
+      const title = document.createElement("div"); title.className = "title"; title.textContent = CATEGORY_LABELS[catId] || catId;
+      const toggle = document.createElement("div"); toggle.className = "toggle"; toggle.textContent = collapsed ? "▸" : "▾";
+      header.appendChild(title); header.appendChild(toggle);
+      const body = document.createElement("div"); body.className = "count-body";
+      items.forEach((it) => { const row = document.createElement("div"); row.className = "count-row"; row.innerHTML = `<span>${it.name}</span><b>${it.qty}</b>`; body.appendChild(row); });
+      header.addEventListener("click", () => { const isNowCollapsed = group.classList.toggle("is-collapsed"); toggle.textContent = isNowCollapsed ? "▸" : "▾"; });
+      group.appendChild(header); group.appendChild(body);
+      return group;
+    }
+
+    function updateCounts() {
+      if (!countsEl) return;
+      const byId = new Map();
+      for (const { tiles } of placement.values()) {
+        for (const row of tiles) {
+          for (const cell of row) {
+            if (!cell) continue;
+            byId.set(cell.id, (byId.get(cell.id) || 0) + 1);
+          }
+        }
+      }
+      const groups = { ground: [], road: [], wall: [], misc: [] };
+      for (const t of TILES) {
+        const qty = byId.get(t.id) || 0;
+        const cat = t.category || "misc";
+        if (!groups[cat]) groups[cat] = [];
+        groups[cat].push({ name: t.name, qty });
+      }
+      countsEl.innerHTML = "";
+      const INITIAL_COLLAPSED = { ground: false, road: false, wall: false, misc: false };
+      ["ground", "road", "wall", "misc"].forEach((cat) => { const items = groups[cat] || []; countsEl.appendChild(makeGroup(cat, items, INITIAL_COLLAPSED[cat])); });
+      let totalTiles = 0; for (const qty of byId.values()) totalTiles += qty;
+      document.getElementById("totalTiles").textContent = totalTiles;
+      document.getElementById("totalBoards").textContent = placement.size;
+    }
+
+    // Save / Load / Export (localStorage)
+    function save() {
+      const data = { placement: [...placement.entries()], creationStack, selectedCategory };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      alert("Saved.");
+    }
+    function load() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) { alert("Nothing saved yet."); return; }
+      const data = JSON.parse(raw);
+      placement.clear();
+      for (const [k, v] of data.placement) placement.set(k, v);
+      creationStack.length = 0; creationStack.push(...(data.creationStack || []));
+      selectedCategory = data.selectedCategory || "ground";
+      nextBoardId = Math.max(1, ...[...placement.values()].map((b) => b.id)) + 1;
+      catButtons.forEach((b) => b.classList.toggle("active", b.dataset.cat === selectedCategory));
+      buildPalette(); renderBoards();
+      alert("Loaded.");
+    }
+    function clearAll() {
+      if (!confirm("Clear ALL boards?")) return;
+      const root = creationStack[0];
+      placement.clear(); creationStack.length = 0;
+      if (root) { const [x, y] = parseKey(root); addBoardAt(x, y); } else { addBoardAt(0, 0); }
+      renderBoards();
+    }
+
+    function exportJSON() {
+      const blob = new Blob([
+        JSON.stringify({ placement: [...placement.entries()], creationStack, tilesCatalog: TILES }, null, 2)
+      ], { type: "application/json" });
+      downloadBlob(blob, "boards.json");
+    }
+    function exportCSV() {
+      const lines = [];
+      for (const [k, v] of placement) {
+        lines.push(`# ${k}`);
+        for (let r = 0; r < v.h; r++) {
+          const row = v.tiles[r].map((cell) => (cell ? `${cell.id}@${cell.rot}` : "")).join(",");
+          lines.push(row);
+        }
+        lines.push("");
+      }
+      const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+      downloadBlob(blob, "boards.csv");
+    }
+    function downloadBlob(blob, filename) {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      URL.revokeObjectURL(a.href);
+      a.remove();
+    }
+
+    // Mode switch wiring
+    const modePaintBtn = document.getElementById("modePaint");
+    const modeEraseBtn = document.getElementById("modeErase");
+    modePaintBtn.onclick = () => { dragMode = "paint"; modePaintBtn.classList.add("active"); modeEraseBtn.classList.remove("active"); };
+    modeEraseBtn.onclick = () => { dragMode = "erase"; modeEraseBtn.classList.add("active"); modePaintBtn.classList.remove("active"); };
+
+    // Toolbar wiring
+    document.getElementById("exportJson").onclick = exportJSON;
+    document.getElementById("exportCsv").onclick = exportCSV;
+    document.getElementById("clear").onclick = clearAll;
+
+    // Programmatic Save/Load shortcuts (long-press on header title)
+    const titleEl = document.querySelector('h1');
+    let titlePressTimer = null;
+    titleEl.addEventListener('pointerdown', () => { titlePressTimer = setTimeout(save, 600); });
+    titleEl.addEventListener('pointerup', () => { clearTimeout(titlePressTimer); });
+    titleEl.addEventListener('dblclick', load);
+
+    // Initial setup
+    buildPalette();
+    addBoardAt(0, 0);
+
+    // Stop painting on pointerup outside cells
+    window.addEventListener("pointerup", () => { isDragging = false; lastPaintKey = null; activePointerId = null; }, { passive: true });
+  </script>
+</body>
+</html>

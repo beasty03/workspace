@@ -1,1368 +1,1821 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Board Planner</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
-      :root {
-        --cell: 36px;
-        --gap: 0;
-        --zoom: 1;
-        /* flush boards */
-        --bg: #0f1221;
-        --panel: #171a2e;
-        --fg: #e6e8f2;
-        --muted: #9aa3b2;
-        --accent: #6aa3ff;
-        --border: #232747;
-      }
 
-      html,
-      body {
-        height: 100%;
-        background: var(--bg);
-        color: var(--fg);
-        font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Arial,
-          sans-serif;
-        margin: 0;
-      }
+<head>
+  <meta charset="utf-8" />
+  <title>Board Planner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    /* =========================
+       Theme & Layout Variables
+    ========================= */
+    :root {
+      --cell: 36px;
+      --gap: 0;
+      --zoom: 1;
+      --panX: 0px;
+      --panY: 0px;
+      --bg: #0f1221;
+      --panel: #171a2e;
+      --fg: #e6e8f2;
+      --muted: #9aa3b2;
+      --accent: #6aa3ff;
+      --border: #232747;
+      --tile-bg: #0f132a;
+      --tile-border: #2b315e;
+    }
 
-      header {
-        padding: 12px 16px;
-        background: #0b0e1a;
-        border-bottom: 1px solid var(--border);
-      }
+    /* =========================
+       Base
+    ========================= */
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
 
-      h1 {
-        font-size: 16px;
-        margin: 0 0 6px;
-      }
+    header {
+      padding: 12px 16px;
+      background: #0b0e1a;
+      border-bottom: 1px solid var(--border);
+    }
 
-      .toolbar {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-      }
+    h1 {
+      font-size: 16px;
+      margin: 0 0 6px;
+    }
 
-      button {
-        background: #232747;
-        color: var(--fg);
-        border: 1px solid #2f3563;
-        padding: 6px 10px;
-        border-radius: 8px;
-        cursor: pointer;
-      }
+    /* Toolbar */
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
 
-      button:hover {
-        border-color: var(--accent);
-      }
+    button {
+      background: #232747;
+      color: var(--fg);
+      border: 1px solid #2f3563;
+      padding: 6px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
 
-      main {
-        display: grid;
-        grid-template-columns: 340px 1fr 280px;
-        gap: 12px;
-        padding: 12px;
-      }
+    button:hover {
+      border-color: var(--accent);
+    }
 
-      .panel {
-        background: var(--panel);
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 12px;
-      }
+    /* Main columns: palette / boards / counts */
+    main {
+      display: grid;
+      grid-template-columns: 340px 1fr 280px;
+      gap: 12px;
+      padding: 12px;
+    }
 
-      .panel h2 {
-        margin: 0 0 10px;
-        font-size: 13px;
-        color: var(--muted);
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-      }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+    }
 
-      /* Category switcher */
-      .category-switch {
-        display: flex;
-        gap: 8px;
-        margin-bottom: 10px;
-        flex-wrap: wrap;
-      }
+    .panel h2 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
 
-      .cat-btn {
-        background: #232747;
-        color: var(--fg);
-        border: 1px solid #2f3563;
-        padding: 6px 10px;
-        border-radius: 999px;
-        cursor: pointer;
-      }
+    .legend,
+    .tip {
+      color: var(--muted);
+      font-size: 12px;
+    }
 
-      .cat-btn.active {
-        border-color: var(--accent);
-        background: #263066;
-      }
+    /* =========================
+       Palettes (Tiles & Board Shapes)
+    ========================= */
+    .category-switch {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
 
-      /* Palette */
-      .palette {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 8px;
-      }
+    .cat-btn {
+      background: #232747;
+      color: var(--fg);
+      border: 1px solid #2f3563;
+      padding: 6px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+    }
 
-      .tile {
-        height: 52px;
-        border-radius: 10px;
-        border: 2px solid transparent;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        position: relative;
-      }
+    .cat-btn.active {
+      border-color: var(--accent);
+      background: #263066;
+    }
 
-      .tile.selected {
-        border-color: var(--accent);
-      }
+    .palette {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
 
-      .glyph {
-        font-weight: 800;
-        font-size: 22px;
-        line-height: 1;
-        display: inline-block;
-        transform-origin: 50% 50%;
-      }
+    .tile {
+      height: 52px;
+      border-radius: 10px;
+      border: 2px solid transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
 
-      .tile-name {
-        position: absolute;
-        bottom: 6px;
-        left: 8px;
-        font-size: 11px;
-        color: var(--muted);
-      }
+    .tile.selected {
+      border-color: var(--accent);
+    }
 
-      /* Boards layout: centered, flush spacing */
-      .boards-wrap {
-        overflow: auto;
-        min-height: 60vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
+    .tile .content {
+      position: absolute;
+      inset: 6px;
+      border-radius: 8px;
+      background: var(--tile-bg);
+      border: 1px solid var(--tile-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
 
-      .boards-grid {
-        display: grid;
-        gap: var(--gap);
-        justify-content: center;
-        /* center horizontally */
-        align-content: center;
-        /* center vertically when space allows */
-        place-items: center;
-        /* center each grid item */
-      }
+    .tile .tile-name {
+      position: absolute;
+      bottom: 6px;
+      left: 8px;
+      font-size: 11px;
+      color: var(--muted);
+    }
 
-      .board {
-        background: #0a0d1a;
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 12px;
-        position: relative;
-        width: max-content;
-      }
+    .glyph {
+      font-weight: 800;
+      font-size: 22px;
+      line-height: 1;
+      display: inline-block;
+      transform-origin: 50% 50%;
+    }
 
-      .board-grid {
-        display: grid;
-        grid-template-columns: repeat(3, var(--cell));
-        gap: var(--gap);
-      }
+    /* =========================
+       Boards Panel
+    ========================= */
+    .boards-wrap {
+      position: relative;
+      overflow: hidden;
+    }
 
-      .cell {
-        width: var(--cell);
-        height: var(--cell);
-        background: #141830;
-        border: 1px solid #1d2242;
-        border-radius: 8px;
-        position: relative;
-        user-select: none;
-      }
+    /* Zoom controls */
+    .zoom-controls {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      z-index: 10;
+      display: flex;
+      gap: 8px;
+      contain: layout paint;
+      pointer-events: auto;
+    }
 
-      .cell[data-empty="true"] {
-        background: transparent;
-        border: 1px dashed #2a315f;
-      }
+    .zoom-btn {
+      background: #232747;
+      border: 1px solid #2f3563;
+      padding: 6px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      color: white;
+    }
 
-      .content {
-        position: absolute;
-        inset: 2px;
-        border-radius: 6px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
+    /* Inner viewport */
+    .boards-viewport {
+      width: 100%;
+      height: 60vh;
+      box-sizing: border-box;
+      padding: 12px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scroll-behavior: smooth;
+      scrollbar-gutter: stable;
+      overscroll-behavior: contain;
+      display: flex;
+      justify-content: flex-start;
+      align-items: flex-start;
+    }
 
-      .content .glyph {
-        font-size: 20px;
-      }
+    #panContainer {
+      transform: translate(var(--panX), var(--panY));
+      display: inline-block;
+      min-width: 0;
+    }
 
-      .rotation-dot {
-        position: absolute;
-        top: 4px;
-        right: 6px;
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: var(--muted);
-        opacity: 0.45;
-      }
+    #zoomContainer {
+      transform: scale(var(--zoom));
+      transform-origin: top left;
+      display: inline-block;
+      min-width: 0;
+    }
 
-      /* Edge controls: shared − on touching edges; + when no neighbor */
-      .edge-btn {
-        position: absolute;
-        width: 22px;
-        height: 22px;
-        border-radius: 50%;
-        background: #232747;
-        border: 1px solid #2f3563;
-        color: var(--fg);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        font-weight: 800;
-        font-size: 14px;
-        line-height: 1;
-        transition: border-color 0.15s ease;
-        z-index: 2;
-      }
+    /* =========================
+       Boards Grid & Board Card
+    ========================= */
+    .boards-grid {
+      display: grid;
+      gap: var(--gap);
+      place-items: center;
+      justify-content: center;
+      align-content: center;
+    }
 
-      .edge-btn:hover {
-        border-color: var(--accent);
-      }
+    .board {
+      background: #0a0d1a;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      position: relative;
+      width: max-content;
+      cursor: pointer;
+    }
 
-      .edge-top {
-        top: -11px;
-        left: 50%;
-        transform: translateX(-50%);
-      }
+    .board.active {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
 
-      .edge-right {
-        right: -11px;
-        top: 50%;
-        transform: translateY(-50%);
-      }
+    .board-grid {
+      display: grid;
+      grid-template-columns: repeat(3, var(--cell));
+      gap: var(--gap);
+    }
 
-      .edge-bottom {
-        bottom: -11px;
-        left: 50%;
-        transform: translateX(-50%);
-      }
+    .board-spacer {
+      width: 0;
+      height: 0;
+    }
 
-      .edge-left {
-        left: -11px;
-        top: 50%;
-        transform: translateY(-50%);
-      }
+    .board-clear-btn {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #232747;
+      border: 1px solid #2f3563;
+      color: #e6e8f2;
+      font-weight: 800;
+      font-size: 13px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 3;
+    }
 
-      .legend {
-        margin-top: 8px;
-        color: var(--muted);
-      }
+    .board-clear-btn:hover {
+      border-color: var(--accent);
+    }
 
-      /* Collapsible Counts */
-      .counts {
-        font-variant-numeric: tabular-nums;
-      }
+    #boardsGrid {
+      position: relative;
+    }
 
-      .count-group {
-        border: 1px solid #2a2f55;
-        border-radius: 8px;
-        margin-bottom: 10px;
-        overflow: hidden;
-      }
+    .board.filler-board {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      /* we will position by center */
+      z-index: 2;
+      pointer-events: auto;
+    }
 
-      .count-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 8px 10px;
-        cursor: pointer;
-        background: #1a1f39;
-        color: #e6e8f2;
-      }
+    /* Cells */
+    .cell {
+      width: var(--cell);
+      height: var(--cell);
+      background: #141830;
+      border: 1px solid #1d2242;
+      border-radius: 8px;
+      position: relative;
+      user-select: none;
+    }
 
-      .count-header .title {
-        font-size: 12px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-      }
+    .cell[data-empty="true"] {
+      background: transparent;
+      border: 1px dashed #2a315f;
+    }
 
-      .count-header .toggle {
-        font-size: 16px;
-        font-weight: 800;
-        width: 20px;
-        text-align: center;
-        color: #9aa3b2;
-      }
+    .cell .content {
+      position: absolute;
+      inset: 2px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
 
-      .count-body {
-        padding: 8px 10px;
-        background: #131733;
-        display: block;
-      }
+    .cell .glyph {
+      font-size: 20px;
+    }
 
-      .count-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 4px 0;
-        border-bottom: 1px dashed #2a2f55;
-      }
+    .rotation-dot {
+      position: absolute;
+      top: 4px;
+      right: 6px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--muted);
+      opacity: 0.45;
+    }
 
-      .count-row:last-child {
-        border-bottom: 0;
-      }
+    /* =========================
+       Side handles (+ / −)
+    ========================= */
+    .side-btn {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #232747;
+      border: 1px solid #2f3563;
+      color: #fff;
+      font-weight: 800;
+      font-size: 14px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 2;
+      box-shadow: 0 1px 0 #0004;
+    }
 
-      .is-collapsed .count-body {
-        display: none;
-      }
+    .side-btn.is-disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
 
-      .tip {
-        color: var(--muted);
-        font-size: 12px;
-        margin-top: 8px;
-      }
+    .side-btn.top {
+      top: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
 
-      .footer {
-        padding: 12px 16px;
-        color: var(--muted);
-      }
+    .side-btn.right {
+      right: -10px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
 
-      .board-spacer {
-        width: 0;
-        height: 0;
-      }
+    .side-btn.bottom {
+      bottom: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
 
-      /* invisible spacers keep grid shape without visible gap */
+    .side-btn.left {
+      left: -10px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
 
-      /* Per-board clear button (top-right, smaller, tight to corner) */
-      .board-clear-btn {
-        position: absolute;
-        top: 4px;
-        /* closer to the top edge */
-        right: 4px;
-        /* move to top-right corner */
-        width: 22px;
-        /* smaller than before */
-        height: 22px;
-        /* smaller than before */
-        border-radius: 50%;
-        background: #232747;
-        border: 1px solid #2f3563;
-        color: #e6e8f2;
-        font-weight: 800;
-        font-size: 13px;
-        /* slightly smaller glyph size */
-        line-height: 1;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        z-index: 3;
-        /* above cells and edge buttons */
-      }
+    /* =========================
+       Counts Panel
+    ========================= */
+    .counts {
+      font-variant-numeric: tabular-nums;
+    }
 
-      .board-clear-btn:hover {
-        border-color: var(--accent);
-      }
+    .count-group {
+      border: 1px solid #2a2f55;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
 
-      .zoom-controls {
-        display: flex;
-        gap: 8px;
-        margin-bottom: 10px;
-      }
+    .count-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      cursor: pointer;
+      background: #1a1f39;
+      color: #e6e8f2;
+    }
 
-      .zoom-btn {
-        background: #232747;
-        border: 1px solid #2f3563;
-        padding: 6px 10px;
-        border-radius: 8px;
-        cursor: pointer;
-        color: white;
-      }
+    .count-header .title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
 
-      .boards-wrap {
-        overflow: auto;
-        min-height: 60vh;
-        position: relative;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        /* NEW: allow scaling */
-      }
+    .count-header .toggle {
+      font-size: 16px;
+      font-weight: 800;
+      width: 20px;
+      text-align: center;
+      color: #9aa3b2;
+    }
 
-      #zoomContainer {
-        transform: scale(var(--zoom));
-        transform-origin: top center;
-      }
-    </style>
-  </head>
+    .count-body {
+      padding: 8px 10px;
+      background: #131733;
+      display: block;
+    }
 
-  <body>
-    <header>
-      <h1>Modulare tile planner for board games</h1>
-      <div class="toolbar">
-        <button id="exportCsv">📤 Export CSV</button>
-        <button id="exportJson">📤 Export JSON</button>
-        <button id="save">💾 Save</button>
-        <button id="load">📥 Load</button>
-        <button id="clear">🗑️ Clear All</button>
-      </div>
-    </header>
+    .count-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      border-bottom: 1px dashed #2a2f55;
+    }
 
-    <main>
-      <!-- Palette -->
-      <section class="panel">
-        <h2>Tile palette</h2>
+    .count-row:last-child {
+      border-bottom: 0;
+    }
 
-        <!-- Category switcher -->
-        <div class="category-switch">
-          <button class="cat-btn active" data-cat="ground">Ground</button>
-          <button class="cat-btn" data-cat="road">Road</button>
-          <button class="cat-btn" data-cat="wall">Walls</button>
-          <button class="cat-btn" data-cat="misc">Misc</button>
-        </div>
+    .is-collapsed .count-body {
+      display: none;
+    }
 
-        <div class="palette" id="palette"></div>
+    /* =========================
+       Free-look cursor
+    ========================= */
+    .boards-viewport.free-look {
+      cursor: grab;
+    }
 
-        <h2 style="margin-top: 16px">Board size</h2>
-        <div class="palette" id="boardPalette"></div>
-        <div class="legend tip">
-          Left‑drag to paint. Left‑click a placed tile to rotate it 90° (only
-          that tile). Right‑click to clear.<br />
-          Edge controls: <b>+</b> adds a neighbor; when a neighbor exists the
-          shared edge shows <b>−</b>. Clicking <b>−</b> removes the
-          <i>last generated board</i>.
-        </div>
-      </section>
+    .boards-viewport.free-look.dragging {
+      cursor: grabbing;
+    }
 
-      <!-- Boards -->
-      <section class="panel boards-wrap">
-        <div
-          class="zoom-controls"
-          style="
-            position: absolute;
-            top: 8px;
-            right: 12px;
-            z-index: 10;
-            display: flex;
-            gap: 8px;
-          "
-        >
-          <button class="zoom-btn" id="zoomOut">➖</button>
-          <button class="zoom-btn" id="zoomIn">➕</button>
-          <button class="zoom-btn" id="zoomReset">🔄</button>
-        </div>
-        <div
-          id="zoomContainer"
-          style="transform: scale(var(--zoom)); transform-origin: top center"
-        >
-          <div
-            id="boardsGrid"
-            class="boards-grid"
-            aria-label="Boards grid"
-          ></div>
-        </div>
-      </section>
-      <!-- Counts -->
-      <aside class="panel">
-        <h2>number of tiles</h2>
-        <div id="counts" class="counts"></div>
+    /* =========================
+       Footer
+    ========================= */
+    .footer {
+      padding: 12px 16px;
+      color: var(--muted);
+    }
+  </style>
+</head>
 
-        <div
-          id="globalCounters"
-          style="
-            margin-top: 12px;
-            text-align: right;
-            font-size: 13px;
-            color: var(--muted);
-          "
-        >
-          <div>Total tiles: <b id="totalTiles">0</b></div>
-          <div>Total boards: <b id="totalBoards">0</b></div>
-        </div>
-      </aside>
-    </main>
-
-    <div class="footer tip">
-      Image code is commented (search <code>// IMAGE VERSION</code>). Serve via
-      <code>http://localhost</code> to avoid <code>file://</code> issues when
-      you switch to images.
+<body>
+  <header>
+    <h1>Modulare tile planner for board games</h1>
+    <div class="toolbar">
+      <button id="exportCsv">📤 Export CSV</button>
+      <button id="exportJson">📤 Export JSON</button>
+      <button id="save">💾 Save</button>
+      <button id="load">📥 Load</button>
+      <button id="clear">🗑️ Clear All</button>
     </div>
+  </header>
 
-    <script>
-      /* Zoom Logic */
-      let zoomLevel = 1;
+  <main>
+    <!-- Palette -->
+    <section class="panel">
+      <h2>Tile palette</h2>
+      <div class="category-switch">
+        <button class="cat-btn active" data-cat="ground">Ground</button>
+        <button class="cat-btn" data-cat="road">Road</button>
+        <button class="cat-btn" data-cat="wall">Walls</button>
+        <button class="cat-btn" data-cat="misc">Misc</button>
+      </div>
+      <div class="palette" id="palette"></div>
 
-      function applyZoom() {
-        document.documentElement.style.setProperty("--zoom", zoomLevel);
-      }
+      <h2 style="margin-top: 16px">Board size</h2>
+      <div class="palette" id="boardPalette"></div>
 
-      document.getElementById("zoomIn").onclick = () => {
-        zoomLevel = Math.min(3, zoomLevel + 0.1);
-        applyZoom();
-      };
+      <h2 style="margin-top: 16px">Starting board size</h2>
+      <div class="palette" id="startBoardPalette"></div>
 
-      document.getElementById("zoomOut").onclick = () => {
-        zoomLevel = Math.max(0.3, zoomLevel - 0.1);
-        applyZoom();
-      };
+      <div class="legend tip">
+        Left‑drag to paint. Left‑click a placed tile to rotate it 90°. Right‑click to clear.<br />
+        Starting size: <b>3×3</b> or <b>5×5</b> only.<br />
+        Thin boards (<b>1×3</b>, <b>3×1</b>, <b>1×5</b>, <b>5×1</b>) are <b>terminal</b> — no <b>+</b> handles; they
+        only show a single <b>−</b> on the connected side.<br />
+        Removing a <b>3×3/5×5</b> with thin connectors will prompt and remove the connected thin pieces too.<br />
+        Connecting a <b>5×5</b> to a <b>3×3</b> auto‑creates a virtual <b>1×1 filler</b> (counted in totals, not
+        selectable).
+      </div>
+    </section>
 
-      document.getElementById("zoomReset").onclick = () => {
-        zoomLevel = 1;
-        applyZoom();
-      };
+    <!-- Boards -->
+    <section class="panel boards-wrap">
+      <div class="zoom-controls">
+        <button class="zoom-btn" id="zoomOut">➖</button>
+        <button class="zoom-btn" id="zoomIn">➕</button>
+        <button class="zoom-btn" id="zoomReset">🔄</button>
+      </div>
 
-      // ---------- TILE DEFINITIONS WITH CATEGORIES ----------
+      <div class="boards-viewport">
+        <div id="panContainer">
+          <div id="zoomContainer">
+            <div id="boardsGrid" class="boards-grid" aria-label="Boards grid"></div>
+          </div>
+        </div>
+      </div>
+    </section>
 
-      const BOARD_SHAPES = [
-        { id: "b1x3", w: 1, h: 3, name: "1×3" },
-        { id: "b3x1", w: 3, h: 1, name: "3×1" },
-        { id: "b3x3", w: 3, h: 3, name: "3×3" },
-        { id: "b1x5", w: 1, h: 5, name: "1×5" },
-        { id: "b5x1", w: 5, h: 1, name: "5×1" },
-        { id: "b5x5", w: 5, h: 5, name: "5×5" },
-      ];
+    <!-- Counts -->
+    <aside class="panel">
+      <h2>Number of tiles</h2>
+      <div id="counts" class="counts"></div>
+      <div id="globalCounters" style="margin-top:12px; text-align:right; font-size:13px; color:var(--muted);">
+        <div>Total tiles: <b id="totalTiles">0</b></div>
+        <div>Total boards: <b id="totalBoards">0</b></div>
+        <div>Fillers (1×1): <b id="totalFillers">0</b></div>
+      </div>
+    </aside>
+  </main>
 
-      const TILES = [
-        // Ground
-        {
-          id: "sand",
-          name: "Sand",
-          glyph: "S",
-          rotatable: false,
-          color: "#e5c07b",
-          category: "ground",
-        },
-        {
-          id: "grass",
-          name: "Grass",
-          glyph: "G",
-          rotatable: false,
-          color: "#26a269",
-          category: "ground",
-        },
-        {
-          id: "stone",
-          name: "Stone",
-          glyph: "O",
-          rotatable: false,
-          color: "#77767b",
-          category: "ground",
-        },
-        {
-          id: "cave",
-          name: "Cave",
-          glyph: "C",
-          rotatable: false,
-          color: "#5a4a6f",
-          category: "ground",
-        },
+  <div class="footer tip">
+    Serve via <code>http://localhost</code> to avoid <code>file://</code> issues if you later switch to images.
+  </div>
 
-        // Walls
-        {
-          id: "wall_straight",
-          name: "Wall - Straight",
-          glyph: "I",
-          rotatable: true,
-          color: "#FFFFFF",
-          category: "wall",
-        },
-        {
-          id: "wall_corner",
-          name: "Wall - Corner",
-          glyph: "L",
-          rotatable: true,
-          color: "#FFFFFF",
-          category: "wall",
-        },
-        {
-          id: "wall_opening",
-          name: "Wall - Opening",
-          glyph: "U",
-          rotatable: true,
-          color: "#FFFFFF",
-          category: "wall",
-        },
-
-        // Roads
-        {
-          id: "straight_road",
-          name: "Road - Straight",
-          glyph: "I",
-          rotatable: true,
-          color: "#f38ba8",
-          category: "road",
-        },
-        {
-          id: "corner",
-          name: "Road - Corner",
-          glyph: "L",
-          rotatable: true,
-          color: "#f38ba8",
-          category: "road",
-        },
-        {
-          id: "road_t",
-          name: "Road - T",
-          glyph: "T",
-          rotatable: true,
-          color: "#f38ba8",
-          category: "road",
-        },
-        {
-          id: "intersection",
-          name: "Road - Cross",
-          glyph: "+",
-          rotatable: false,
-          color: "#f38ba8",
-          category: "road",
-        },
-
-        // Misc
-        {
-          id: "tree",
-          name: "tree",
-          glyph: "T",
-          rotatable: true,
-          color: "#3a7",
-          category: "misc",
-        },
-        {
-          id: "barrel",
-          name: "barrel",
-          glyph: "B",
-          rotatable: true,
-          color: "#e79",
-          category: "misc",
-        },
-        {
-          id: "table",
-          name: "table",
-          glyph: "T",
-          rotatable: true,
-          color: "#7ad",
-          category: "misc",
-        },
-        {
-          id: "statue",
-          name: "statue",
-          glyph: "+",
-          rotatable: false,
-          color: "#ccc",
-          category: "misc",
-        },
-        {
-          id: "marker",
-          name: "Marker",
-          glyph: "•",
-          rotatable: false,
-          color: "#ddd",
-          category: "misc",
-        },
-        {
-          id: "chest",
-          name: "Chest",
-          glyph: "C",
-          rotatable: false,
-          color: "#ddd",
-          category: "misc",
-        },
-        {
-          id: "door",
-          name: "Door",
-          glyph: "D",
-          rotatable: true,
-          color: "#f38ba8",
-          category: "misc",
-        },
-      ];
-
-      let selectedBoardShape = BOARD_SHAPES[2]; // default 3×3
-      // ---------- OPTIONAL IMAGE VERSION (COMMENTED) ----------
-      /*
-    const TILES = [
-      // Ground
-      { id: "sand",  name: "Sand",  img: "./assets/sand.png",  rotatable: false, category: "ground" },
-      { id: "grass", name: "Grass", img: "./assets/grass.png", rotatable: false, category: "ground" },
-      { id: "stone", name: "Stone", img: "./assets/stone.png", rotatable: false, category: "ground" },
-      { id: "cave",  name: "Cave",  img: "./assets/cave.png",  rotatable: false, category: "ground" },
-
-      // Walls
-      { id: "wall_straight", name: "Wall – Straight", img: "./assets/wall_straight.png", rotatable: true,  category: "wall" },
-      { id: "wall_corner",   name: "Wall – Corner",   img: "./assets/wall_corner.png",   rotatable: true,  category: "wall" },
-      { id: "wall_t",        name: "Wall – T",        img: "./assets/wall_t.png",        rotatable: true,  category: "wall" },
-      { id: "wall_cross",    name: "Wall – Cross",    img: "./assets/wall_cross.png",    rotatable: false, category: "wall" },
-
-      // Misc (roads + marker)
-      { id: "straight_road", name: "Road – Straight", img: "./assets/straight_road.png", rotatable: true,  category: "misc" },
-      { id: "corner",        name: "Road – Corner",   img: "./assets/corner.png",        rotatable: true,  category: "misc" },
-      { id: "road_t",        name: "Road – T",        img: "./assets/road_t.png",        rotatable: true,  category: "misc" },
-      { id: "intersection",  name: "Road – Cross",    img: "./assets/intersection.png",  rotatable: false, category: "misc" },
-      { id: "marker",        name: "Marker",          img: "./assets/marker.png",        rotatable: false, category: "misc" },
+  <script>
+    /* =========================
+       Config & Constants
+    ========================= */
+    const STORAGE_KEY = "tilePlanner.coords.v10";
+    const FIT_MIN_ZOOM = 0.3;
+    const FIT_MAX_ZOOM = 3;
+    const FIT_MARGIN = 24;
+    const BOARD_SHAPES = [
+      { id: "b1x3", w: 1, h: 3, name: "1×3" },
+      { id: "b3x1", w: 3, h: 1, name: "3×1" },
+      { id: "b3x3", w: 3, h: 3, name: "3×3" },
+      { id: "b1x5", w: 1, h: 5, name: "1×5" },
+      { id: "b5x1", w: 5, h: 1, name: "5×1" },
+      { id: "b5x5", w: 5, h: 5, name: "5×5" },
     ];
-    */
+    const CATEGORY_LABELS = { ground: "Ground", road: "Road", wall: "Walls", misc: "Misc" };
+    const START_SHAPES = ["b3x3", "b5x5"]; // starting choices only
 
-      // ---------- CONFIG ----------
-      const STORAGE_KEY = "tilePlanner.coords.v4";
-      const BOARD_SIZE = 3; // each mini board is 3×3
-
-      // ---------- STATE ----------
-      // Coordinate-based placement: map "x,y" -> { tiles: 3×3, id }
-      const placement = new Map();
-      const creationStack = []; // LIFO for "last generated board"
-      let nextBoardId = 1;
-
-      let selectedTileId = TILES[0].id;
-      let selectedCategory = "ground";
-      let isPainting = false;
-      let isDragging = false;
-      let dragMode = "paint";
-
-      let lastPaintKey = null;
-
-      // ---------- DOM ----------
-      const paletteEl = document.getElementById("palette");
-      const boardsGrid = document.getElementById("boardsGrid");
-      const countsEl = document.getElementById("counts");
-      const catButtons = document.querySelectorAll(".cat-btn");
-
-      // Helpers
-      const keyOf = (x, y) => `${x},${y}`;
-      const parseKey = (k) => k.split(",").map(Number);
-
-      function createEmptyBoard(w, h) {
-        return Array.from({ length: h }, () =>
-          Array.from({ length: w }, () => null)
-        );
-      }
-
-      function addBoardAt(x, y) {
-        const k = keyOf(x, y);
-        if (placement.has(k)) return;
-
-        const { w, h } = selectedBoardShape;
-
-        placement.set(k, {
-          id: nextBoardId++,
-          w,
-          h,
-          tiles: createEmptyBoard(w, h),
-        });
-
-        creationStack.push(k);
-        renderBoards();
-      }
-
-      function removeLastBoard() {
-        if (creationStack.length <= 1) return; // keep root
-        const k = creationStack.pop();
-        placement.delete(k);
-        renderBoards();
-      }
-
-      // Category switching
-      catButtons.forEach((btn) => {
-        btn.addEventListener("click", () => {
-          selectedCategory = btn.dataset.cat;
-          catButtons.forEach((b) => b.classList.toggle("active", b === btn));
-          buildPalette();
-        });
-      });
-
-      buildBoardPalette();
-
-      // Palette build (filtered by category)
-      function buildPalette() {
-        const items = TILES.filter((t) => t.category === selectedCategory);
-        paletteEl.innerHTML = "";
-
-        for (const t of items) {
-          const btn = document.createElement("button");
-          btn.className = "tile" + (t.id === selectedTileId ? " selected" : "");
-          btn.title = t.name;
-
-          const content = document.createElement("div");
-          content.className = "content";
-          content.style.background = "#0f132a";
-          content.style.border = "1px solid #2b315e";
-          content.style.borderRadius = "8px";
-
-          const glyph = document.createElement("span");
-          glyph.className = "glyph";
-          glyph.textContent = t.glyph ?? "•";
-          glyph.style.color = t.color ?? "#ddd";
-          content.appendChild(glyph);
-
-          const label = document.createElement("div");
-          label.className = "tile-name";
-          label.textContent = t.name;
-
-          btn.appendChild(content);
-          btn.appendChild(label);
-
-          btn.addEventListener("click", () => {
-            selectedTileId = t.id;
-            document
-              .querySelectorAll(".tile")
-              .forEach((el) => el.classList.toggle("selected", el === btn));
-          });
-
-          paletteEl.appendChild(btn);
+    /* =========================
+       Tile Catalog + Registry
+    ========================= */
+    const CATEGORY_COLORS = { ground: "#26a269", road: "#f38ba8", wall: "#ffffff", misc: "#ddd" };
+    const DEFAULT_TILE = { rotatable: false, glyph: "•", color: "#ddd", category: "misc" };
+    const tilesCatalog = [];
+    const tilesById = new Map();
+    function normalizeTile(input) {
+      const t = { ...DEFAULT_TILE, ...input };
+      if (!t.id || !t.name) throw new Error(`Tile must have {id, name}. Received: ${JSON.stringify(input)}`);
+      t.category = t.category || DEFAULT_TILE.category;
+      if (!t.color) t.color = CATEGORY_COLORS[t.category] || DEFAULT_TILE.color;
+      if (!t.glyph || t.glyph.trim() === "") t.glyph = t.name[0].toUpperCase();
+      t.rotatable = !!t.rotatable;
+      return t;
+    }
+    function registerTiles(list) {
+      for (const raw of list) {
+        const t = normalizeTile(raw);
+        if (tilesById.has(t.id)) {
+          const idx = tilesCatalog.findIndex(x => x.id === t.id);
+          tilesCatalog[idx] = t;
+        } else {
+          tilesCatalog.push(t);
         }
+        tilesById.set(t.id, t);
       }
+    }
+    registerTiles([
+      // Ground
+      { id: "sand", name: "Sand", category: "ground", glyph: "S", color: "#e5c07b" },
+      { id: "grass", name: "Grass", category: "ground", glyph: "G" },
+      { id: "stone", name: "Stone", category: "ground", glyph: "O", color: "#77767b" },
+      { id: "cave", name: "Cave", category: "ground", glyph: "C", color: "#5a4a6f" },
+      // Walls
+      { id: "wall_straight", name: "Wall - Straight", category: "wall", glyph: "I", rotatable: true },
+      { id: "wall_corner", name: "Wall - Corner", category: "wall", glyph: "L", rotatable: true },
+      { id: "wall_opening", name: "Wall - Opening", category: "wall", glyph: "U", rotatable: true },
+      // Roads
+      { id: "straight_road", name: "Road - Straight", category: "road", glyph: "I", rotatable: true },
+      { id: "corner", name: "Road - Corner", category: "road", glyph: "L", rotatable: true },
+      { id: "road_t", name: "Road - T", category: "road", glyph: "T", rotatable: true },
+      { id: "intersection", name: "Road - Cross", category: "road", glyph: "+", rotatable: false },
+      // Misc
+      { id: "tree", name: "Tree", category: "misc", glyph: "T", rotatable: true, color: "#3a7" },
+      { id: "barrel", name: "Barrel", category: "misc", glyph: "B", rotatable: true, color: "#e79" },
+      { id: "table", name: "Table", category: "misc", glyph: "T", rotatable: true, color: "#7ad" },
+      { id: "statue", name: "Statue", category: "misc", glyph: "+", rotatable: false, color: "#ccc" },
+      { id: "marker", name: "Marker", category: "misc", glyph: "•", rotatable: false },
+      { id: "chest", name: "Chest", category: "misc", glyph: "C", rotatable: false },
+      { id: "door", name: "Door", category: "misc", glyph: "D", rotatable: true, color: "#f38ba8" },
+    ]);
 
-      function buildBoardPalette() {
-        const wrap = document.getElementById("boardPalette");
-        wrap.innerHTML = "";
+    const placement = new Map(); // "x,y" -> { id, w, h, tiles[h][w], attached: {top/right/bottom/left:Set} }
+    const creationStack = [];
+    const fillerTiles = new Map();
 
-        BOARD_SHAPES.forEach((shape) => {
-          const btn = document.createElement("button");
-          btn.className =
-            "tile" + (shape.id === selectedBoardShape.id ? " selected" : "");
-          btn.style.height = "40px";
+    // Virtual fillers: set of pair keys "minKey|maxKey" for connected 5×5↔3×3
+    const fillers = new Set();
+    const pairKey = (a, b) => (a < b) ? `${a}|${b}` : `${b}|${a}`;
 
-          const content = document.createElement("div");
-          content.className = "content";
-          content.style.background = "#0f132a";
-          content.style.border = "1px solid #2b315e";
-          content.style.borderRadius = "8px";
-          content.textContent = shape.name;
+    /* =========================
+       State
+    ========================= */
 
-          btn.appendChild(content);
+    let nextBoardId = 1;
+    let selectedCategory = "ground";
+    let selectedTileId = tilesCatalog[0].id;
+    let selectedBoardShape = BOARD_SHAPES.find(s => s.id === "b3x3");
+    let selectedStartingShape = BOARD_SHAPES.find(s => s.id === "b3x3");
 
-          btn.addEventListener("click", () => {
-            selectedBoardShape = shape;
-            document
-              .querySelectorAll("#boardPalette .tile")
-              .forEach((el) => el.classList.toggle("selected", el === btn));
-          });
+    let isDragging = false;
+    let dragMode = "paint";
+    let lastPaintKey = null;
+    let zoomLevel = 1;
+    let manualZoomOverride = false;
+    let fitRaf = null;
 
-          wrap.appendChild(btn);
-        });
+    // Free-look & panning
+    let isFreeLook = false;
+    let isPanning = false;
+    let panStart = null;
+    let panStartVars = null;
+
+    // Active selection (for highlight)
+    let activeBoardCoord = null;
+
+    /* =========================
+       DOM Refs
+    ========================= */
+    const paletteEl = document.getElementById("palette");
+    const boardsGrid = document.getElementById("boardsGrid");
+    const countsEl = document.getElementById("counts");
+    const catButtons = document.querySelectorAll(".cat-btn");
+
+    /* =========================
+       Helpers
+    ========================= */
+    const keyOf = (x, y) => `${x},${y}`;
+    const parseKey = (k) => k.split(",").map(Number);
+    const byId = (id) => tilesById.get(id);
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    function createEmptyBoard(w, h) {
+      return Array.from({ length: h }, () => Array.from({ length: w }, () => null));
+    }
+
+    // Attachment tracking
+    function ensureAttachmentSlots(bd) {
+      if (!bd.attached) {
+        bd.attached = { top: new Set(), right: new Set(), bottom: new Set(), left: new Set() };
       }
+      return bd.attached;
+    }
 
-      // Boards render (grid aligned by coordinate extents, but flush spacing)
-      function renderBoards() {
-        boardsGrid.innerHTML = "";
+    function sideOfAFacingB(ax, ay, bx, by) {
+      if (bx === ax && by === ay - 1) return "top";
+      if (bx === ax + 1 && by === ay) return "right";
+      if (bx === ax && by === ay + 1) return "bottom";
+      if (bx === ax - 1 && by === ay) return "left";
+      return null;
+    }
+    function opposite(side) {
+      return side === "top" ? "bottom" :
+        side === "right" ? "left" :
+          side === "bottom" ? "top" :
+            side === "left" ? "right" : null;
+    }
 
-        const keys = [...placement.keys()];
-        if (keys.length === 0) return;
+    // Detect thin boards (1×N or N×1 where N>1)
+    function isThinBoard(bdOrShape) {
+      return ((bdOrShape.w === 1 && bdOrShape.h > 1) || (bdOrShape.h === 1 && bdOrShape.w > 1));
+    }
 
-        const coords = keys.map(parseKey);
-        const xs = coords.map(([x]) => x),
-          ys = coords.map(([, y]) => y);
-        const minX = Math.min(...xs),
-          maxX = Math.max(...xs);
-        const minY = Math.min(...ys),
-          maxY = Math.max(...ys);
-        const cols = maxX - minX + 1;
+    // Squares
+    function isSquare3(b) { return b.w === 3 && b.h === 3; }
+    function isSquare5(b) { return b.w === 5 && b.h === 5; }
 
-        boardsGrid.style.gridTemplateColumns = `repeat(${cols}, max-content)`;
+    // Filler qualification: connected squares 5×5 ↔ 3×3
+    function qualifiesFiller(a, b) {
+      return (isSquare5(a) && isSquare3(b)) || (isSquare3(a) && isSquare5(b));
+    }
 
-        for (let gy = minY; gy <= maxY; gy++) {
-          for (let gx = minX; gx <= maxX; gx++) {
-            const k = keyOf(gx, gy);
-            if (!placement.has(k)) {
-              const spacer = document.createElement("div");
-              spacer.className = "board-spacer";
-              boardsGrid.appendChild(spacer);
-              continue;
-            }
+    // Orientation allowance for the shape being added
+    function allowedSidesForShape(shape) {
+      if (shape.w === 1 && shape.h === 3) return new Set(["left", "right"]);   // 1×3 → left/right
+      if (shape.w === 3 && shape.h === 1) return new Set(["top", "bottom"]);   // 3×1 → top/bottom
+      if (shape.w === 1 && shape.h === 5) return new Set(["left", "right"]);   // 1×5 → left/right
+      if (shape.w === 5 && shape.h === 1) return new Set(["top", "bottom"]);   // 5×1 → top/bottom
+      return new Set(["top", "right", "bottom", "left"]);                       // squares etc.
+    }
+    function longDim(s) { return Math.max(s.w, s.h); }
+    function sideLength(board, side) {
+      // If attaching on left/right, contact edge length equals board.h
+      // If attaching on top/bottom, contact edge length equals board.w
+      return (side === "left" || side === "right") ? board.h : board.w;
+    }
 
-            const boardData = placement.get(k);
-            const boardEl = document.createElement("div");
-            boardEl.className = "board";
-            boardEl.dataset.coord = k;
-            boardsGrid.appendChild(boardEl);
+    // Terminal behavior: thin boards accept NO attachments
+    function capacityForSide(bd, side) {
+      if (isThinBoard(bd)) return 0;     // block attaching next to ANY thin board
+      return Infinity;
+    }
 
-            // Per-board "Clear" button — top-right corner
-            const clearBtn = document.createElement("button");
-            clearBtn.className = "board-clear-btn";
-            clearBtn.type = "button";
-            clearBtn.title = "Clear this board";
-            clearBtn.textContent = "🗑"; // you can switch to "×" or "⨉" if you prefer
-            clearBtn.addEventListener("click", () => clearBoardAt(k));
-            boardEl.appendChild(clearBtn);
+    function setActiveBoard(k) {
+      activeBoardCoord = k;
+      boardsGrid.querySelectorAll(".board").forEach(el => el.classList.remove("active"));
+      const el = boardsGrid.querySelector(`[data-coord="${k}"]`);
+      if (el) el.classList.add("active");
+    }
 
-            const grid = document.createElement("div");
-            grid.className = "board-grid";
-            grid.style.gridTemplateColumns = `repeat(${boardData.w}, var(--cell))`;
-            boardEl.appendChild(grid);
+    function getPanVars() {
+      const cs = getComputedStyle(document.documentElement);
+      const x = parseFloat(cs.getPropertyValue('--panX')) || 0;
+      const y = parseFloat(cs.getPropertyValue('--panY')) || 0;
+      return { x, y };
+    }
+    function setPanVars(x, y) {
+      document.documentElement.style.setProperty('--panX', `${x}px`);
+      document.documentElement.style.setProperty('--panY', `${y}px`);
+    }
+    function updateFreeLookMode() {
+      isFreeLook = (selectedTileId == null);
+      const vp = document.querySelector('.boards-viewport');
+      if (!vp) return;
+      vp.classList.toggle('free-look', isFreeLook);
+    }
 
-            const { w, h } = boardData;
+    // Return the board key that was added last among the two (based on creationStack order)
+    function latestOfPair(k1, k2) {
+      const i1 = creationStack.indexOf(k1);
+      const i2 = creationStack.indexOf(k2);
+      // If one index is missing, prefer the one that exists; otherwise pick the larger index (later add)
+      if (i1 < 0 && i2 < 0) return k2;
+      if (i1 < 0) return k2;
+      if (i2 < 0) return k1;
+      return (i2 > i1) ? k2 : k1;
+    }
 
-            for (let r = 0; r < h; r++) {
-              for (let c = 0; c < w; c++) {
-                const cellEl = document.createElement("div");
-                cellEl.className = "cell";
-                cellEl.dataset.empty = boardData.tiles[r][c] ? "false" : "true";
+    // Collect the direct neighbor keys attached to board k
+    function getNeighborKeys(k) {
+      const bd = placement.get(k);
+      if (!bd) return new Set();
+      ensureAttachmentSlots(bd);
+      const keys = new Set();
+      for (const side of ["top", "right", "bottom", "left"]) {
+        for (const nk of bd.attached[side]) keys.add(nk);
+      }
+      return keys;
+    }
 
-                const content = document.createElement("div");
-                content.className = "content";
-                cellEl.appendChild(content);
+    function getReachableFromOrigin() {
+      const origin = "0,0";
+      if (!placement.has(origin)) return new Set(); // should not happen, but safe guard
 
-                const dot = document.createElement("div");
-                dot.className = "rotation-dot";
-                content.appendChild(dot);
+      const visited = new Set([origin]);
+      const queue = [origin];
 
-                // Events: click = rotate if filled, else place; drag paints
-                let startPos = null;
-                cellEl.addEventListener("mousedown", (e) => {
-                  e.preventDefault();
-                  const hasTile = !!boardData.tiles[r][c];
-
-                  if (e.button === 2) {
-                    // RIGHT BUTTON: start ERASE drag
-                    dragMode = "erase";
-                    isDragging = true;
-                    startPos = { x: e.clientX, y: e.clientY };
-                    eraseAt(k, r, c); // clear the first cell immediately
-                    return;
-                  }
-
-                  // LEFT BUTTON
-                  if (!hasTile) {
-                    // empty cell -> start PAINT drag
-                    dragMode = "paint";
-                    isDragging = true;
-                    startPos = { x: e.clientX, y: e.clientY };
-                    paintAt(k, r, c); // paint the first cell immediately
-                  } else {
-                    // filled -> rotate on mouseup if it was a *click* (no movement)
-                    isDragging = false;
-                    startPos = { x: e.clientX, y: e.clientY };
-                  }
-                });
-
-                cellEl.addEventListener("mouseenter", () => {
-                  if (!isDragging) return;
-                  if (dragMode === "paint") {
-                    paintAt(k, r, c);
-                  } else if (dragMode === "erase") {
-                    eraseAt(k, r, c);
-                  }
-                });
-
-                cellEl.addEventListener("mouseup", (e) => {
-                  const endPos = { x: e.clientX, y: e.clientY };
-                  const moved =
-                    !startPos ||
-                    Math.hypot(endPos.x - startPos.x, endPos.y - startPos.y) >
-                      2;
-                  const data = boardData.tiles[r][c];
-
-                  // If it was a *left-click* (not dragging) on an existing tile -> rotate that tile
-                  if (e.button === 0 && !isDragging && data && !moved) {
-                    rotateCell(k, r, c);
-                  }
-
-                  isDragging = false; // stop any drag (paint or erase)
-                  lastPaintKey = null; // reset drag de-dup key
-                });
-
-                cellEl.addEventListener("contextmenu", (e) =>
-                  e.preventDefault()
-                );
-
-                grid.appendChild(cellEl);
-                renderCellContent(k, r, c, cellEl);
-              }
-            }
-
-            // Edge controls (shared − on touching edges; + otherwise)
-            const hasTop = placement.has(keyOf(gx, gy - 1));
-            const hasRight = placement.has(keyOf(gx + 1, gy));
-            const hasBottom = placement.has(keyOf(gx, gy + 1));
-            const hasLeft = placement.has(keyOf(gx - 1, gy));
-
-            if (!hasTop) {
-              const btnTop = document.createElement("div");
-              btnTop.className = "edge-btn edge-top";
-              btnTop.textContent = "+";
-              btnTop.title = "Add board above";
-              btnTop.addEventListener("click", () => addBoardAt(gx, gy - 1));
-              boardEl.appendChild(btnTop);
-            }
-
-            const btnRight = document.createElement("div");
-            btnRight.className = "edge-btn edge-right";
-            btnRight.textContent = hasRight ? "−" : "+";
-            btnRight.title = hasRight
-              ? "Remove last generated board"
-              : "Add board to the right";
-            btnRight.addEventListener("click", () => {
-              hasRight ? removeLastBoard() : addBoardAt(gx + 1, gy);
-            });
-            boardEl.appendChild(btnRight);
-
-            const btnBottom = document.createElement("div");
-            btnBottom.className = "edge-btn edge-bottom";
-            btnBottom.textContent = hasBottom ? "−" : "+";
-            btnBottom.title = hasBottom
-              ? "Remove last generated board"
-              : "Add board below";
-            btnBottom.addEventListener("click", () => {
-              hasBottom ? removeLastBoard() : addBoardAt(gx, gy + 1);
-            });
-            boardEl.appendChild(btnBottom);
-
-            if (!hasLeft) {
-              const btnLeft = document.createElement("div");
-              btnLeft.className = "edge-btn edge-left";
-              btnLeft.textContent = "+";
-              btnLeft.title = "Add board to the left";
-              btnLeft.addEventListener("click", () => addBoardAt(gx - 1, gy));
-              boardEl.appendChild(btnLeft);
-            }
+      while (queue.length) {
+        const cur = queue.shift();
+        for (const nk of getNeighborKeys(cur)) {
+          if (!placement.has(nk)) continue;
+          if (!visited.has(nk)) {
+            visited.add(nk);
+            queue.push(nk);
           }
         }
+      }
+      return visited;
+    }
 
-        updateCounts();
+    // Delete every board not connected to origin
+    function pruneNotConnectedToOrigin() {
+      const reachable = getReachableFromOrigin();
+      const toDelete = [];
+
+      for (const k of placement.keys()) {
+        if (k === "0,0") continue;       // origin is always kept
+        if (!reachable.has(k)) toDelete.push(k);
       }
 
-      // Render a single cell
-      function renderCellContent(k, r, c, cellEl) {
-        const content = cellEl.firstChild;
-        content.innerHTML = "";
+      if (toDelete.length > 0) {
+        for (const k of toDelete) deleteBoardInternal(k);
+        if (typeof recomputeFillers === "function") recomputeFillers();
+      }
+    }
 
-        const boardData = placement.get(k);
-        const data = boardData.tiles[r][c];
-        if (!data) {
-          cellEl.dataset.empty = "true";
-          return;
-        }
-        cellEl.dataset.empty = "false";
 
-        const tile = TILES.find((t) => t.id === data.id);
-        if (!tile) return;
+    function renderFillerCell(pair, cellEl) {
+      const content = cellEl.firstChild;
+      content.innerHTML = "";
+      const data = fillerTiles.get(pair) || null;
 
-        // LETTER VERSION
+      if (!data) {
+        cellEl.dataset.empty = "true";
+        // Empty cell uses dashed style; still show rotation dot for consistency
+        const dot = document.createElement("div");
+        dot.className = "rotation-dot";
+        content.appendChild(dot);
+        return;
+      }
+
+      cellEl.dataset.empty = "false";
+      const tile = byId(data.id);
+      if (!tile) return;
+
+      if (tile.img) {
+        const img = document.createElement("img");
+        img.src = tile.img; img.alt = tile.name;
+        Object.assign(img.style, {
+          width: "100%", height: "100%", objectFit: "contain",
+          transform: `rotate(${data.rot}deg)`
+        });
+        content.appendChild(img);
+      } else {
         const glyph = document.createElement("span");
         glyph.className = "glyph";
         glyph.textContent = tile.glyph ?? "•";
         glyph.style.color = tile.color ?? "#ddd";
         glyph.style.transform = `rotate(${data.rot}deg)`;
-        content.appendChild(glyph);
-
         const dot = document.createElement("div");
         dot.className = "rotation-dot";
         dot.style.transform = `rotate(${data.rot}deg)`;
+        content.appendChild(glyph);
         content.appendChild(dot);
-
-        // ---------- IMAGE VERSION (COMMENTED) ----------
-        /*
-      const img = document.createElement("img");
-      img.src = tile.img;           // e.g., "./assets/wall_corner.png"
-      img.alt = tile.name;
-      img.style.width = "100%";
-      img.style.height = "100%";
-      img.style.objectFit = "contain";
-      img.style.transform = `rotate(${data.rot}deg)`;
-      img.addEventListener("error", () => console.error("Failed to load:", img.src));
-      content.appendChild(img);
-      */
       }
+    }
 
-      // Painting & rotation
+    function paintFiller(pair) {
+      if (!selectedTileId) return;
+      if (fillerTiles.get(pair)) return;
+      const key = `${pair}_paint_${selectedTileId}`;
+      if (lastPaintKey === key) return;
+      fillerTiles.set(pair, { id: selectedTileId, rot: 0 });
+      lastPaintKey = key;
+      updateCounts();
+    }
 
-      // Paint only if the cell is empty; do not overwrite existing tiles during drag
-      function paintAt(k, r, c) {
-        const boardData = placement.get(k);
-        const existing = boardData.tiles[r][c];
-        if (existing) return; // <-- guard: skip non-empty cells
+    function eraseFiller(pair) {
+      if (!fillerTiles.get(pair)) return;
+      const key = `${pair}_erase`;
+      if (lastPaintKey === key) return;
+      fillerTiles.set(pair, null);
+      lastPaintKey = key;
+      updateCounts();
+    }
 
-        const key = `${k}_${r}_${c}_${selectedTileId}`;
-        if (lastPaintKey === key) return;
-        setCell(k, r, c, selectedTileId, 0);
-        lastPaintKey = key;
-      }
+    function rotateFiller(pair) {
+      const cell = fillerTiles.get(pair);
+      if (!cell) return;
+      const tile = byId(cell.id);
+      if (!tile || !tile.rotatable) return;
+      cell.rot = (cell.rot + 90) % 360;
+      fillerTiles.set(pair, cell);
+      updateCounts();
+    }
 
-      // Right-drag erase: clear cells continuously
-      function eraseAt(k, r, c) {
-        const boardData = placement.get(k);
-        if (!boardData.tiles[r][c]) return; // nothing to erase
-        const key = `${k}_${r}_${c}_erase`;
-        if (lastPaintKey === key) return; // debounce while dragging
-        clearCell(k, r, c); // your clearCell re-renders and updates counts
-        lastPaintKey = key;
-      }
+    function renderFillerBoards() {
+      const grid = document.getElementById('boardsGrid');
+      if (!grid) return;
 
-      // Clear all tiles in a specific board (e.g., 3×3)
-      function clearBoardAt(k) {
-        const boardData = placement.get(k);
-        if (!boardData) return;
+      // Remove any previous filler boards
+      grid.querySelectorAll('.filler-board').forEach(e => e.remove());
 
-        // Wipe all 3×3 cells
-        for (let r = 0; r < boardData.h; r++) {
-          for (let c = 0; c < boardData.w; c++) {
-            boardData.tiles[r][c] = null;
+      // Each filler pair key is "minKey\nmaxKey"
+      for (const pair of fillers.values()) {
+        const [k1, k2] = pair.split('\n');
+        const el1 = grid.querySelector(`[data-coord="${k1}"]`);
+        const el2 = grid.querySelector(`[data-coord="${k2}"]`);
+        if (!el1 || !el2) continue;
+
+        // Midpoint between board centers (robust to zoom/pan/transforms)
+        const gridRect = grid.getBoundingClientRect();
+        const r1 = el1.getBoundingClientRect();
+        const r2 = el2.getBoundingClientRect();
+
+        // centers relative to the grid's coordinate space
+        const cx1 = (r1.left + r1.right) / 2 - gridRect.left;
+        const cy1 = (r1.top + r1.bottom) / 2 - gridRect.top;
+        const cx2 = (r2.left + r2.right) / 2 - gridRect.left;
+        const cy2 = (r2.top + r2.bottom) / 2 - gridRect.top;
+
+        const mx = (cx1 + cx2) / 2;
+        const my = (cy1 + cy2) / 2;
+
+
+        // Build a full-looking board card (1×1 inner grid)
+        const boardEl = document.createElement('div');
+        boardEl.className = 'board filler-board';
+        boardEl.style.left = `${mx}px`;
+        boardEl.style.top = `${my}px`;
+
+        const gridEl = document.createElement('div');
+        gridEl.className = 'board-grid';
+        gridEl.style.gridTemplateColumns = `repeat(1, var(--cell))`;
+
+        // Single cell
+        const cellEl = document.createElement('div');
+        cellEl.className = 'cell';
+
+        const content = document.createElement('div');
+        content.className = 'content';
+        cellEl.appendChild(content);
+
+        // Make the filler cell interactive (paint/erase/rotate)
+        let startPos = null;
+        cellEl.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          if (isFreeLook && e.button === 0) return; // honor free-look
+          startPos = { x: e.clientX, y: e.clientY };
+
+          const hasTile = !!fillerTiles.get(pair);
+          if (e.button === 2) {
+            dragMode = "erase"; isDragging = true; eraseFiller(pair); renderFillerCell(pair, cellEl); return;
           }
+          if (!hasTile) {
+            dragMode = "paint"; isDragging = true; paintFiller(pair); renderFillerCell(pair, cellEl);
+          } else {
+            isDragging = false;
+          }
+        });
+        cellEl.addEventListener("mouseenter", () => {
+          if (!isDragging || isFreeLook) return;
+          if (dragMode === "paint") { paintFiller(pair); renderFillerCell(pair, cellEl); }
+          else if (dragMode === "erase") { eraseFiller(pair); renderFillerCell(pair, cellEl); }
+        });
+        cellEl.addEventListener("mouseup", (e) => {
+          const endPos = { x: e.clientX, y: e.clientY };
+          const moved = !startPos || Math.hypot(endPos.x - startPos.x, endPos.y - startPos.y) > 2;
+          const data = fillerTiles.get(pair);
+          if (e.button === 0 && !isDragging && data && !moved) {
+            rotateFiller(pair);
+            renderFillerCell(pair, cellEl);
+          }
+          isDragging = false; lastPaintKey = null;
+        });
+        cellEl.addEventListener("contextmenu", (e) => e.preventDefault());
+
+        gridEl.appendChild(cellEl);
+        boardEl.appendChild(gridEl);
+        grid.appendChild(boardEl);
+
+        // Initial render of cell content
+        renderFillerCell(pair, cellEl);
+      }
+    }
+
+    /* =========================
+       Build UI (palettes)
+    ========================= */
+    function buildPalette() {
+      const items = tilesCatalog.filter(t => t.category === selectedCategory);
+      paletteEl.innerHTML = "";
+      for (const t of items) {
+        const btn = document.createElement("button");
+        btn.className = "tile" + (t.id === selectedTileId ? " selected" : "");
+        btn.title = t.name;
+        const content = document.createElement("div"); content.className = "content";
+        const glyph = document.createElement("span"); glyph.className = "glyph"; glyph.textContent = t.glyph ?? "•"; glyph.style.color = t.color ?? "#ddd";
+        const label = document.createElement("div"); label.className = "tile-name"; label.textContent = t.name;
+        content.appendChild(glyph); btn.appendChild(content); btn.appendChild(label);
+
+        btn.addEventListener("click", () => {
+          const paletteScope = document.querySelector("#palette");
+          if (selectedTileId === t.id) {
+            selectedTileId = null;
+            paletteScope.querySelectorAll(".tile").forEach(el => el.classList.remove("selected"));
+          } else {
+            selectedTileId = t.id;
+            paletteScope.querySelectorAll(".tile").forEach(el => el.classList.toggle("selected", el === btn));
+          }
+          updateFreeLookMode();
+        });
+        paletteEl.appendChild(btn);
+      }
+    }
+
+    function buildBoardPalette() {
+      const wrap = document.getElementById("boardPalette");
+      wrap.innerHTML = "";
+      BOARD_SHAPES.forEach(shape => {
+        const btn = document.createElement("button");
+        btn.className = "tile" + (shape.id === selectedBoardShape.id ? " selected" : "");
+        btn.style.height = "40px";
+        const content = document.createElement("div"); content.className = "content"; content.textContent = shape.name;
+        btn.appendChild(content);
+        btn.addEventListener("click", () => {
+          selectedBoardShape = shape;
+          wrap.querySelectorAll(".tile").forEach(el => el.classList.toggle("selected", el === btn));
+          renderBoards(); // update side handles
+        });
+        wrap.appendChild(btn);
+      });
+    }
+
+    function buildStartBoardPalette() {
+      const wrap = document.getElementById("startBoardPalette");
+      wrap.innerHTML = "";
+      BOARD_SHAPES
+        .filter(shape => START_SHAPES.includes(shape.id))  // only 3×3 & 5×5
+        .forEach(shape => {
+          const btn = document.createElement("button");
+          btn.className = "tile" + (shape.id === selectedStartingShape.id ? " selected" : "");
+          btn.style.height = "40px";
+          const content = document.createElement("div"); content.className = "content"; content.textContent = shape.name;
+          btn.appendChild(content);
+          btn.addEventListener("click", () => {
+            selectedStartingShape = shape;
+            wrap.querySelectorAll(".tile").forEach(el => el.classList.toggle("selected", el === btn));
+            // Resize origin if exists
+            const rootKey = "0,0";
+            const bd = placement.get(rootKey);
+            if (bd && (bd.w !== shape.w || bd.h !== shape.h)) {
+              placement.set(rootKey, { id: bd.id, w: shape.w, h: shape.h, tiles: createEmptyBoard(shape.w, shape.h) });
+              renderBoards();
+            }
+          });
+          wrap.appendChild(btn);
+        });
+    }
+
+    /* =========================
+       Placement Ops
+    ========================= */
+    function addBoardAt(x, y) {
+      const k = keyOf(x, y);
+      if (placement.has(k)) return;
+
+      const neighborCoords = [
+        [x, y - 1], // top
+        [x + 1, y], // right
+        [x, y + 1], // bottom
+        [x - 1, y], // left
+      ].filter(([nx, ny]) => placement.has(keyOf(nx, ny)));
+
+      if (neighborCoords.length === 0 && placement.size > 0) {
+        alert("You can only add a board adjacent to an existing one.");
+        return;
+      }
+
+      const isOrigin = (x === 0 && y === 0);
+      const shape = (isOrigin && !placement.has("0,0")) ? selectedStartingShape : selectedBoardShape;
+      const { w, h } = shape;
+      const isNewThin = isThinBoard(shape);
+      const allowedSides = allowedSidesForShape(shape);
+
+      for (const [nx, ny] of neighborCoords) {
+        const nk = keyOf(nx, ny);
+        const nb = placement.get(nk);
+        ensureAttachmentSlots(nb);
+
+        const sideOnNeighbor = sideOfAFacingB(nx, ny, x, y);
+        const sideOnNew = opposite(sideOnNeighbor);
+
+        // neighbor capacity: thin boards cannot accept attachments
+        const nCap = capacityForSide(nb, sideOnNeighbor);
+        const nUsed = nb.attached[sideOnNeighbor].size;
+        if (nUsed >= nCap) {
+          alert(`Blocked: neighbor at ${nk} side "${sideOnNeighbor}" is closed.`);
+          return;
         }
 
-        // Re-render this board and update counts
-        const boardEl = boardsGrid.querySelector(`[data-coord="${k}"]`);
-        if (boardEl) {
-          const grid = boardEl.querySelector(".board-grid");
-          // Repaint every cell of this board
-          for (let r = 0; r < BOARD_SIZE; r++) {
-            for (let c = 0; c < BOARD_SIZE; c++) {
-              const cellIdx = r * boardData.w + c;
-              const cellEl = grid.children[cellIdx];
+        // orientation check for the NEW board’s side (always)
+        if (!allowedSides.has(sideOnNew)) {
+          alert(`Blocked: ${shape.name} can only attach on ${[...allowedSides].join(" / ")} sides.`);
+          return;
+        }
+
+        // size fit applies ONLY to thin boards (squares can attach freely)
+        if (isNewThin) {
+          const newLong = Math.max(w, h);
+          const edgeLen = sideLength(nb, sideOnNeighbor);
+          if (newLong > edgeLen) {
+            alert(`Blocked: ${shape.name} (length ${newLong}) exceeds neighbor’s ${sideOnNeighbor} edge (${edgeLen}).`);
+            return;
+          }
+        }
+      }
+
+      // Place the new board
+      const bd = { id: nextBoardId++, w, h, tiles: createEmptyBoard(w, h) };
+      ensureAttachmentSlots(bd);
+      placement.set(k, bd);
+      creationStack.push(k);
+
+      // Register attachments
+      for (const [nx, ny] of neighborCoords) {
+        const nk = keyOf(nx, ny);
+        const nb = placement.get(nk);
+        ensureAttachmentSlots(nb);
+        const sideOnNeighbor = sideOfAFacingB(nx, ny, x, y);
+        const sideOnNew = opposite(sideOnNeighbor);
+        nb.attached[sideOnNeighbor].add(k);
+        bd.attached[sideOnNew].add(nk);
+      }
+
+      // Recompute fillers (new connections may qualify)
+      recomputeFillers();
+
+      setActiveBoard(k);
+      manualZoomOverride = false;
+      renderBoards();
+    }
+
+    // Helper: remove key from creationStack
+    function removeKeyFromCreationStack(k) {
+      const idx = creationStack.indexOf(k);
+      if (idx >= 0) creationStack.splice(idx, 1);
+    }
+
+    // Internal deletion without prompt, with full detach
+    function deleteBoardInternal(k) {
+      if (!placement.has(k)) return;
+      if (k === "0,0") return; // keep origin
+
+      const [x, y] = parseKey(k);
+      const neighborCoords = [[x, y - 1], [x + 1, y], [x, y + 1], [x - 1, y]];
+      const bd = placement.get(k);
+      ensureAttachmentSlots(bd);
+
+      // Detach from neighbors' attached sets
+      for (const [nx, ny] of neighborCoords) {
+        const nk = keyOf(nx, ny);
+        const nb = placement.get(nk);
+        if (!nb) continue;
+        ensureAttachmentSlots(nb);
+        const sideOnNeighbor = sideOfAFacingB(nx, ny, x, y);
+        if (sideOnNeighbor && nb.attached[sideOnNeighbor]) {
+          nb.attached[sideOnNeighbor].delete(k);
+        }
+        // Remove any filler that involves (k, nk)
+        fillers.delete(pairKey(k, nk));
+        fillerTiles.delete(pairKey(k, nk));
+      }
+
+      // Remove the board
+      placement.delete(k);
+      removeKeyFromCreationStack(k);
+
+      // If active removed, set active back to origin if present
+      if (activeBoardCoord === k && placement.has("0,0")) setActiveBoard("0,0");
+    }
+
+    // Public: removal with prompt & thin-connectors cascade (for squares only)
+
+    function removeBoardAt(k) {
+      if (!placement.has(k)) return;
+      if (k === "0,0") return; // keep origin
+
+      const bd = placement.get(k);
+      ensureAttachmentSlots(bd);
+
+      // Only consider THIN neighbors (1×N or N×1) for the prompt
+      const isSquare = !isThinBoard(bd); // squares are 3×3 or 5×5 in your setup
+      const thinNeighbors = [];
+      for (const side of ["top", "right", "bottom", "left"]) {
+        for (const nk of bd.attached[side]) {
+          const nb = placement.get(nk);
+          if (nb && isThinBoard(nb)) thinNeighbors.push(nk);
+        }
+      }
+
+      if (isSquare && thinNeighbors.length > 0) {
+        const shapeLabel = `${bd.w}×${bd.h}`;
+        const count = thinNeighbors.length;
+        const pieceWord = count === 1 ? "thin piece" : "thin pieces";
+        const ok = confirm(
+          `You are removing a ${shapeLabel} board at ${k}.\n\n` +
+          `It has ${count} connected ${pieceWord} (1×N or N×1):\n${thinNeighbors.join(", ")}\n\n` +
+          `Proceeding will remove the ${shapeLabel} board together with these thin ${pieceWord}.\n\n` +
+          `Do you want to continue?`
+        );
+        if (!ok) return;
+
+        // Remove the thin neighbors first
+        for (const nk of thinNeighbors) deleteBoardInternal(nk);
+      }
+
+      // Remove the selected board itself
+      deleteBoardInternal(k);
+
+      // Strong rule: keep only the component connected to origin
+      pruneNotConnectedToOrigin();
+
+      manualZoomOverride = false;
+      renderBoards();
+    }
+
+
+    function clearBoardAt(k) {
+      const bd = placement.get(k);
+      if (!bd) return;
+      for (let r = 0; r < bd.h; r++) for (let c = 0; c < bd.w; c++) bd.tiles[r][c] = null;
+      const boardEl = boardsGrid.querySelector(`[data-coord="${k}"]`);
+      if (boardEl) {
+        const grid = boardEl.querySelector(".board-grid");
+        for (let r = 0; r < bd.h; r++)
+          for (let c = 0; c < bd.w; c++) {
+            const cellEl = grid.children[r * bd.w + c];
+            renderCellContent(k, r, c, cellEl);
+          }
+      }
+      updateCounts();
+    }
+
+    /* =========================
+       Fillers recompute
+    ========================= */
+    function recomputeFillers() {
+      fillers.clear();
+      for (const [k, bd] of placement.entries()) {
+        ensureAttachmentSlots(bd);
+        for (const side of ["top", "right", "bottom", "left"]) {
+          for (const nk of bd.attached[side]) {
+            if (!placement.has(nk)) continue;
+            const nb = placement.get(nk);
+            if (qualifiesFiller(bd, nb)) {
+              fillers.add(pairKey(k, nk));
+            }
+          }
+        }
+      }
+      for (const key of [...fillerTiles.keys()]) {
+        if (!fillers.has(key)) fillerTiles.delete(key);
+      }
+
+      updateCounts(); // keep totals fresh
+    }
+
+    /* =========================
+       Painting / Cells
+    ========================= */
+    function setCell(k, r, c, id, rot) {
+      const bd = placement.get(k);
+      bd.tiles[r][c] = { id, rot };
+      rerenderCellByCoordKey(k, r, c);
+      updateCounts();
+    }
+    function clearCell(k, r, c) {
+      const bd = placement.get(k);
+      bd.tiles[r][c] = null;
+      rerenderCellByCoordKey(k, r, c);
+      updateCounts();
+    }
+    function rotateCell(k, r, c) {
+      const bd = placement.get(k);
+      const cell = bd.tiles[r][c];
+      if (!cell) return;
+      const tile = byId(cell.id);
+      if (!tile || !tile.rotatable) return;
+      cell.rot = (cell.rot + 90) % 360;
+      setCell(k, r, c, cell.id, cell.rot);
+    }
+    function paintAt(k, r, c) {
+      const bd = placement.get(k);
+      if (bd.tiles[r][c]) return;
+      const key = `${k}_${r}_${c}_${selectedTileId}`;
+      if (lastPaintKey === key) return;
+      setCell(k, r, c, selectedTileId, 0);
+      lastPaintKey = key;
+    }
+    function eraseAt(k, r, c) {
+      const bd = placement.get(k);
+      if (!bd.tiles[r][c]) return;
+      const key = `${k}_${r}_${c}_erase`;
+      if (lastPaintKey === key) return;
+      clearCell(k, r, c);
+      lastPaintKey = key;
+    }
+    function renderCellContent(k, r, c, cellEl) {
+      const content = cellEl.firstChild;
+      content.innerHTML = "";
+      const bd = placement.get(k);
+      const data = bd.tiles[r][c];
+      if (!data) { cellEl.dataset.empty = "true"; return; }
+      cellEl.dataset.empty = "false";
+      const tile = byId(data.id);
+      if (!tile) return;
+
+      if (tile.img) {
+        const img = document.createElement("img");
+        img.src = tile.img; img.alt = tile.name;
+        Object.assign(img.style, { width: "100%", height: "100%", objectFit: "contain", transform: `rotate(${data.rot}deg)` });
+        content.appendChild(img);
+      } else {
+        const glyph = document.createElement("span"); glyph.className = "glyph"; glyph.textContent = tile.glyph; glyph.style.color = tile.color; glyph.style.transform = `rotate(${data.rot}deg)`;
+        const dot = document.createElement("div"); dot.className = "rotation-dot"; dot.style.transform = `rotate(${data.rot}deg)`;
+        content.appendChild(glyph); content.appendChild(dot);
+      }
+    }
+    function rerenderCellByCoordKey(k, r, c) {
+      const bd = placement.get(k);
+      if (!bd) return;
+      const boardEl = boardsGrid.querySelector(`[data-coord="${k}"]`);
+      if (!boardEl) return;
+      const grid = boardEl.querySelector(".board-grid");
+      const cellEl = grid.children[r * bd.w + c];
+      renderCellContent(k, r, c, cellEl);
+    }
+
+    /* =========================
+       Side handles (+ / −)
+       - Thin boards: show ONLY "−" on connected side(s), never "+";
+       - Squares: normal +/−, single minus per connection (no overlaps).
+    ========================= */
+    function renderSideHandles(boardEl, k, bd) {
+      const [x, y] = parseKey(k);
+      const sides = [
+        { name: "top", dx: 0, dy: -1, cls: "top" },
+        { name: "right", dx: 1, dy: 0, cls: "right" },
+        { name: "bottom", dx: 0, dy: 1, cls: "bottom" },
+        { name: "left", dx: -1, dy: 0, cls: "left" },
+      ];
+
+      const isThin = isThinBoard(bd);
+
+      sides.forEach(s => {
+
+        const neighborKey = keyOf(x + s.dx, y + s.dy);
+        const neighborExists = placement.has(neighborKey);
+
+        const btn = document.createElement("button");
+        btn.className = `side-btn ${s.cls}`;
+        btn.type = "button";
+
+        // Single shared "-" owner: only right/bottom sides render the minus for a pair
+        const isMinusOwner = neighborExists && (s.name === "right" || s.name === "bottom");
+
+        if (neighborExists) {
+          // Show ONE shared "−" only on the owner side
+          if (!isMinusOwner) return;
+
+          btn.textContent = "−";
+          btn.title = `Remove the ${s.name} neighbor (last-added of the two)`;
+
+          // We always remove whichever of the two boards was added last
+          const victim = latestOfPair(k, neighborKey);
+
+          if (victim === "0,0") {
+            // Just in case—origin should never be the last-added, but keep guard
+            btn.disabled = true;
+            btn.classList.add("is-disabled");
+            btn.title = "Cannot remove the origin board";
+          } else {
+            btn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              removeBoardAt(victim);
+            });
+          }
+          boardEl.appendChild(btn);
+          return; // IMPORTANT: don't render "+" on a connected side
+        }
+
+        // No neighbor → show "+" (subject to your rules)
+        btn.textContent = "+";
+        btn.title = `Add a board on ${s.name}`;
+
+        // Orientation & size checks for the selected shape
+        const allowedForSelected = allowedSidesForShape(selectedBoardShape).has(s.name);
+        const sizeOk = isThinBoard(selectedBoardShape)
+          ? (longDim(selectedBoardShape) <= sideLength(bd, s.name)) // thin must fit edge
+          : true;                                                   // squares freely connect
+
+        const allowed = allowedForSelected && sizeOk;
+
+        // Thin boards never show "+"
+        if (!allowed || isThinBoard(bd)) {
+          btn.disabled = true;
+          btn.classList.add("is-disabled");
+        } else {
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            addBoardAt(x + s.dx, y + s.dy);
+          });
+        }
+        boardEl.appendChild(btn);
+      });
+    }
+
+    /* =========================
+       Grid Render (with side handles)
+    ========================= */
+    function renderBoards() {
+      boardsGrid.innerHTML = "";
+      const keys = [...placement.keys()];
+      if (keys.length === 0) return;
+      const coords = keys.map(parseKey);
+      const xs = coords.map(([x]) => x);
+      const ys = coords.map(([, y]) => y);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      const leftCols = Math.max(0, -minX);
+      const rightCols = Math.max(0, maxX);
+      const topRows = Math.max(0, -minY);
+      const bottomRows = Math.max(0, maxY);
+      const totalCols = leftCols + 1 + rightCols;
+      const totalRows = topRows + 1 + bottomRows;
+
+      boardsGrid.style.gridTemplateColumns = `repeat(${totalCols}, max-content)`;
+
+      for (let rowIndex = 0; rowIndex < totalRows; rowIndex++) {
+        const worldY = rowIndex - topRows;
+        for (let colIndex = 0; colIndex < totalCols; colIndex++) {
+          const worldX = colIndex - leftCols;
+          const k = keyOf(worldX, worldY);
+
+          if (!placement.has(k)) {
+            const spacer = document.createElement("div"); spacer.className = "board-spacer";
+            boardsGrid.appendChild(spacer);
+            continue;
+          }
+
+          const bd = placement.get(k);
+
+          // Board card
+          const boardEl = document.createElement("div");
+          boardEl.className = "board";
+          boardEl.dataset.coord = k;
+          boardsGrid.appendChild(boardEl);
+
+          // Click to set active (for highlight only)
+          boardEl.addEventListener("click", () => setActiveBoard(k));
+
+          // Clear tiles button
+          const clearBtn = document.createElement("button");
+          clearBtn.className = "board-clear-btn";
+          clearBtn.type = "button";
+          clearBtn.title = "Clear this board";
+          clearBtn.textContent = "🗑";
+          clearBtn.addEventListener("click", (e) => { e.stopPropagation(); clearBoardAt(k); });
+          boardEl.appendChild(clearBtn);
+
+          // Inner grid for cells
+          const grid = document.createElement("div");
+          grid.className = "board-grid";
+          grid.style.gridTemplateColumns = `repeat(${bd.w}, var(--cell))`;
+          boardEl.appendChild(grid);
+
+          // Cells
+          for (let r = 0; r < bd.h; r++) {
+            for (let c = 0; c < bd.w; c++) {
+              const cellEl = document.createElement("div");
+              cellEl.className = "cell";
+              cellEl.dataset.empty = bd.tiles[r][c] ? "false" : "true";
+              const content = document.createElement("div"); content.className = "content";
+              cellEl.appendChild(content);
+              const dot = document.createElement("div"); dot.className = "rotation-dot";
+              content.appendChild(dot);
+
+              let startPos = null;
+              cellEl.addEventListener("mousedown", (e) => {
+                e.preventDefault();
+                if (isFreeLook && e.button === 0) return; // free-look: don't paint on left drag
+                const hasTile = !!bd.tiles[r][c];
+                if (e.button === 2) {
+                  dragMode = "erase"; isDragging = true; startPos = { x: e.clientX, y: e.clientY }; eraseAt(k, r, c); return;
+                }
+                if (!hasTile) {
+                  dragMode = "paint"; isDragging = true; startPos = { x: e.clientX, y: e.clientY }; paintAt(k, r, c);
+                } else {
+                  isDragging = false; startPos = { x: e.clientX, y: e.clientY };
+                }
+              });
+              cellEl.addEventListener("mouseenter", () => {
+                if (!isDragging || isFreeLook) return;
+                if (dragMode === "paint") paintAt(k, r, c);
+                else if (dragMode === "erase") eraseAt(k, r, c);
+              });
+              cellEl.addEventListener("mouseup", (e) => {
+                const endPos = { x: e.clientX, y: e.clientY };
+                const moved = !startPos || Math.hypot(endPos.x - startPos.x, endPos.y - startPos.y) > 2;
+                const data = bd.tiles[r][c];
+                if (e.button === 0 && !isDragging && data && !moved) rotateCell(k, r, c);
+                isDragging = false; lastPaintKey = null;
+              });
+              cellEl.addEventListener("contextmenu", (e) => e.preventDefault());
+              grid.appendChild(cellEl);
               renderCellContent(k, r, c, cellEl);
             }
           }
+
+          // Side handles (+ / −)
+          ensureAttachmentSlots(bd);
+          renderSideHandles(boardEl, k, bd);
+
+          // Highlight active
+          if (activeBoardCoord === k) boardEl.classList.add("active");
         }
-        updateCounts();
       }
 
-      function setCell(k, r, c, id, rot) {
-        const boardData = placement.get(k);
-        boardData.tiles[r][c] = { id, rot };
-        rerenderCellByCoordKey(k, r, c);
-        updateCounts();
+      // After layout, recompute fillers to keep totals correct
+      recomputeFillers();
+      updateCounts();
+      renderFillerBoards();
+      scheduleFitAndCenter();
+    }
+
+    /* =========================
+       Counts
+    ========================= */
+    function updateCounts() {
+      if (!countsEl) return;
+      const totals = new Map();
+
+      // Normal boards
+      for (const { tiles } of placement.values()) {
+        for (const row of tiles) for (const cell of row) if (cell) {
+          totals.set(cell.id, (totals.get(cell.id) ?? 0) + 1);
+        }
       }
 
-      function clearCell(k, r, c) {
-        const boardData = placement.get(k);
-        boardData.tiles[r][c] = null;
-        rerenderCellByCoordKey(k, r, c);
-        updateCounts();
+      // NEW: filler 1×1 tiles
+      for (const v of fillerTiles.values()) {
+        if (!v) continue;
+        totals.set(v.id, (totals.get(v.id) ?? 0) + 1);
       }
 
-      function rotateCell(k, r, c) {
-        const boardData = placement.get(k);
-        const cell = boardData.tiles[r][c];
-        if (!cell) return;
-        const tile = TILES.find((t) => t.id === cell.id);
-        if (!tile || !tile.rotatable) return;
-        cell.rot = (cell.rot + 90) % 360;
-        setCell(k, r, c, cell.id, cell.rot);
+      const groups = { ground: [], road: [], wall: [], misc: [] };
+      for (const t of tilesCatalog) {
+        const qty = totals.get(t.id) ?? 0;
+        const cat = t.category ?? "misc";
+        groups[cat].push({ name: t.name, qty });
       }
 
-      // Rerender one DOM cell via board data-coord
-      function rerenderCellByCoordKey(k, r, c) {
-        const boardEl = boardsGrid.querySelector(`[data-coord="${k}"]`);
-        if (!boardEl) return;
-        const grid = boardEl.querySelector(".board-grid");
-        const cellIdx = r * boardData.w + c;
-        const cellEl = grid.children[cellIdx];
-        renderCellContent(k, r, c, cellEl);
-      }
-
-      // ---------- Collapsible Counts (Ground / Walls / Misc) ----------
-      const CATEGORY_LABELS = {
-        ground: "Ground",
-        road: "Road",
-        wall: "Walls",
-        misc: "Misc",
-      };
-
-      function makeGroup(catId, items, collapsed = false) {
-        const group = document.createElement("div");
-        group.className = "count-group" + (collapsed ? " is-collapsed" : "");
-
-        const header = document.createElement("div");
-        header.className = "count-header";
-        const title = document.createElement("div");
-        title.className = "title";
-        title.textContent = CATEGORY_LABELS[catId] || catId;
-
-        const toggle = document.createElement("div");
-        toggle.className = "toggle";
-        toggle.textContent = collapsed ? "▸" : "▾";
-
-        header.appendChild(title);
-        header.appendChild(toggle);
-
-        const body = document.createElement("div");
-        body.className = "count-body";
-
-        items.forEach((it) => {
-          const row = document.createElement("div");
-          row.className = "count-row";
+      countsEl.innerHTML = "";
+      ["ground", "road", "wall", "misc"].forEach(cat => {
+        const group = document.createElement("div"); group.className = "count-group";
+        const header = document.createElement("div"); header.className = "count-header";
+        const title = document.createElement("div"); title.className = "title"; title.textContent = CATEGORY_LABELS[cat] ?? cat;
+        const toggle = document.createElement("div"); toggle.className = "toggle"; toggle.textContent = "▾";
+        header.appendChild(title); header.appendChild(toggle);
+        const body = document.createElement("div"); body.className = "count-body";
+        groups[cat].forEach(it => {
+          const row = document.createElement("div"); row.className = "count-row";
           row.innerHTML = `<span>${it.name}</span><b>${it.qty}</b>`;
           body.appendChild(row);
         });
-
         header.addEventListener("click", () => {
-          const isNowCollapsed = group.classList.toggle("is-collapsed");
-          toggle.textContent = isNowCollapsed ? "▸" : "▾";
+          const collapsed = group.classList.toggle("is-collapsed");
+          toggle.textContent = collapsed ? "▸" : "▾";
         });
-
-        group.appendChild(header);
-        group.appendChild(body);
-        return group;
-      }
-
-      function updateCounts() {
-        if (!countsEl) return;
-
-        // Aggregate by tile id across all boards
-        const byId = new Map();
-        for (const { tiles } of placement.values()) {
-          for (const row of tiles) {
-            for (const cell of row) {
-              if (!cell) continue;
-              byId.set(cell.id, (byId.get(cell.id) || 0) + 1);
-            }
-          }
-        }
-
-        // Group by category, preserving TILES order
-        const groups = { ground: [], road: [], wall: [], misc: [] };
-        for (const t of TILES) {
-          const qty = byId.get(t.id) || 0;
-          const cat = t.category || "misc";
-          if (!groups[cat]) groups[cat] = [];
-          groups[cat].push({ name: t.name, qty });
-        }
-
-        // Render collapsible sections (set initial collapsed state per category if desired)
-        countsEl.innerHTML = "";
-        const INITIAL_COLLAPSED = {
-          ground: false,
-          road: false,
-          wall: false,
-          misc: false,
-        };
-        ["ground", "road", "wall", "misc"].forEach((cat) => {
-          const items = groups[cat] || [];
-          countsEl.appendChild(makeGroup(cat, items, INITIAL_COLLAPSED[cat]));
-        });
-
-        // --- Global counters ---
-        let totalTiles = 0;
-        for (const qty of byId.values()) totalTiles += qty;
-
-        document.getElementById("totalTiles").textContent = totalTiles;
-        document.getElementById("totalBoards").textContent = placement.size;
-      }
-
-      // Save / Load / Export
-      function save() {
-        const data = {
-          placement: [...placement.entries()], // [ [ "x,y", {id, tiles} ], ... ]
-          creationStack,
-          BOARD_SIZE,
-          selectedCategory,
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-        alert("Saved.");
-      }
-
-      function load() {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) {
-          alert("Nothing saved yet.");
-          return;
-        }
-        const data = JSON.parse(raw);
-        if (data.BOARD_SIZE !== BOARD_SIZE) {
-          if (!confirm("Saved boards are a different size. Load anyway?"))
-            return;
-        }
-        placement.clear();
-        for (const [k, v] of data.placement) placement.set(k, v);
-        creationStack.length = 0;
-        creationStack.push(...data.creationStack);
-        selectedCategory = data.selectedCategory || "ground";
-        nextBoardId =
-          Math.max(1, ...[...placement.values()].map((b) => b.id)) + 1;
-
-        // update category UI
-        catButtons.forEach((b) =>
-          b.classList.toggle("active", b.dataset.cat === selectedCategory)
-        );
-        buildPalette();
-        renderBoards();
-        alert("Loaded.");
-      }
-
-      function clearAll() {
-        if (!confirm("Clear ALL boards?")) return;
-        const root = creationStack[0];
-        placement.clear();
-        creationStack.length = 0;
-        if (root) {
-          const [x, y] = parseKey(root);
-          addBoardAt(x, y); // recreate root
-        } else {
-          addBoardAt(0, 0);
-        }
-        renderBoards();
-      }
-
-      function exportJSON() {
-        const blob = new Blob(
-          [
-            JSON.stringify(
-              {
-                placement: [...placement.entries()],
-                creationStack,
-                BOARD_SIZE,
-                tilesCatalog: TILES,
-              },
-              null,
-              2
-            ),
-          ],
-          { type: "application/json" }
-        );
-        downloadBlob(blob, "boards.json");
-      }
-
-      // CSV: each board entry: header "# x,y", then 3 rows of id@deg
-      function exportCSV() {
-        const lines = [];
-        for (const [k, v] of placement) {
-          lines.push(`# ${k}`);
-          for (let r = 0; r < BOARD_SIZE; r++) {
-            const row = v.tiles[r]
-              .map((cell) => (cell ? `${cell.id}@${cell.rot}` : ""))
-              .join(",");
-            lines.push(row);
-          }
-          lines.push("");
-        }
-        const blob = new Blob([lines.join("\n")], { type: "text/csv" });
-        downloadBlob(blob, "boards.csv");
-      }
-
-      function downloadBlob(blob, filename) {
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        URL.revokeObjectURL(a.href);
-        a.remove();
-      }
-
-      // Toolbar wiring
-      document.getElementById("save").onclick = save;
-      document.getElementById("load").onclick = load;
-      document.getElementById("clear").onclick = clearAll;
-      document.getElementById("exportJson").onclick = exportJSON;
-      document.getElementById("exportCsv").onclick = exportCSV;
-
-      // Initial setup: root board at (0,0), centered
-      buildPalette();
-      addBoardAt(0, 0);
-
-      // Stop painting on mouseup outside any cell
-      window.addEventListener("mouseup", () => {
-        isPainting = false;
-        lastPaintKey = null;
+        group.appendChild(header); group.appendChild(body);
+        countsEl.appendChild(group);
       });
-    </script>
-  </body>
+
+      // Global counters (you already include fillers.size in Total boards)
+      document.getElementById("totalTiles").textContent =
+        [...totals.values()].reduce((a, b) => a + b, 0);
+      document.getElementById("totalBoards").textContent = placement.size + fillers.size;
+      document.getElementById("totalFillers").textContent = fillers.size;
+    }
+
+
+    /* =========================
+       Zoom / Pan
+    ========================= */
+    function applyZoom() {
+      document.documentElement.style.setProperty("--zoom", zoomLevel);
+      const vp = document.querySelector('.boards-viewport');
+      if (vp) { vp.scrollLeft = 0; vp.scrollTop = 0; }
+      centerOriginBoard();
+    }
+    document.getElementById("zoomIn").onclick = () => { manualZoomOverride = true; zoomLevel = clamp(zoomLevel + 0.1, FIT_MIN_ZOOM, FIT_MAX_ZOOM); applyZoom(); };
+    document.getElementById("zoomOut").onclick = () => { manualZoomOverride = true; zoomLevel = clamp(zoomLevel - 0.1, FIT_MIN_ZOOM, FIT_MAX_ZOOM); applyZoom(); };
+    document.getElementById("zoomReset").onclick = () => { manualZoomOverride = false; scheduleFitAndCenter(); };
+
+    function zoomToFit() {
+      if (manualZoomOverride) return;
+      const viewport = document.querySelector('.boards-viewport');
+      const grid = document.getElementById('boardsGrid');
+      if (!viewport || !grid) return;
+      const availableW = Math.max(0, viewport.clientWidth - FIT_MARGIN);
+      const availableH = Math.max(0, viewport.clientHeight - FIT_MARGIN);
+      const contentW = grid.scrollWidth;
+      const contentH = grid.scrollHeight;
+      if (!contentW || !contentH || !availableW || !availableH) return;
+      const currentW = contentW * zoomLevel;
+      const currentH = contentH * zoomLevel;
+      const needsZoomOut = (currentW > availableW) || (currentH > availableH);
+      if (!needsZoomOut) return;
+      const scaleW = availableW / contentW;
+      const scaleH = availableH / contentH;
+      const targetScale = Math.min(scaleW, scaleH);
+      const clamped = Math.max(FIT_MIN_ZOOM, Math.min(FIT_MAX_ZOOM, targetScale));
+      if (clamped < zoomLevel - 0.001) {
+        zoomLevel = clamped;
+        document.documentElement.style.setProperty("--zoom", zoomLevel);
+      }
+    }
+
+    function centerOriginBoard() {
+      const viewport = document.querySelector('.boards-viewport');
+      const originEl = document.querySelector('[data-coord="0,0"]');
+      const panContainer = document.getElementById('panContainer');
+      const zoomContainer = document.getElementById('zoomContainer');
+      const grid = document.getElementById('boardsGrid');
+      if (!viewport || !originEl || !panContainer || !zoomContainer || !grid) return;
+      const originCx = originEl.offsetLeft + originEl.offsetWidth / 2;
+      const originCy = originEl.offsetTop + originEl.offsetHeight / 2;
+      const vpCx = viewport.clientWidth / 2;
+      const vpCy = viewport.clientHeight / 2;
+      const z = zoomLevel;
+      const dx = vpCx - originCx * z;
+      const dy = vpCy - originCy * z;
+      document.documentElement.style.setProperty('--panX', `${dx}px`);
+      document.documentElement.style.setProperty('--panY', `${dy}px`);
+      viewport.scrollLeft = 0;
+      viewport.scrollTop = 0;
+    }
+
+    function scheduleFitAndCenter() {
+      if (fitRaf) cancelAnimationFrame(fitRaf);
+      fitRaf = requestAnimationFrame(() => {
+        zoomToFit();
+        centerOriginBoard();
+        fitRaf = null;
+      });
+    }
+
+    /* =========================
+       Save / Load / Export
+    ========================= */
+    function save() {
+      const boards = [...placement.entries()].map(([k, v]) => {
+        ensureAttachmentSlots(v);
+        return [k, {
+          ...v,
+          attached: {
+            top: [...v.attached.top],
+            right: [...v.attached.right],
+            bottom: [...v.attached.bottom],
+            left: [...v.attached.left],
+          }
+        }];
+      });
+      const data = {
+        placement: boards,
+        creationStack,
+        selectedCategory,
+        fillerTiles: [...fillerTiles.entries()]
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      alert("Saved.");
+    }
+
+    function load() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) { alert("Nothing saved yet."); return; }
+      const data = JSON.parse(raw);
+      placement.clear();
+      for (const [k, v] of data.placement) {
+        const bd = { ...v };
+        ensureAttachmentSlots(bd);
+        if (v.attached) {
+          bd.attached.top = new Set(v.attached.top || []);
+          bd.attached.right = new Set(v.attached.right || []);
+          bd.attached.bottom = new Set(v.attached.bottom || []);
+          bd.attached.left = new Set(v.attached.left || []);
+        }
+        placement.set(k, bd);
+      }
+      creationStack.length = 0;
+      creationStack.push(...data.creationStack);
+      selectedCategory = data.selectedCategory || "ground";
+      nextBoardId = Math.max(1, ...[...placement.values()].map(b => b.id)) + 1;
+      catButtons.forEach(b => b.classList.toggle("active", b.dataset.cat === selectedCategory));
+      buildPalette();
+
+      fillerTiles.clear();
+      for (const [pair, value] of (data.fillerTiles ?? [])) fillerTiles.set(pair, value);
+
+      renderBoards();
+      alert("Loaded.");
+    }
+
+    function clearAll() {
+      if (!confirm("Clear ALL boards?")) return;
+      placement.clear();
+      creationStack.length = 0;
+      fillers.clear();
+      fillerTiles.clear();
+      addBoardAt(0, 0); // origin uses selectedStartingShape
+      renderBoards();
+    }
+
+    function exportJSON() {
+      const blob = new Blob([JSON.stringify({
+        placement: [...placement.entries()].map(([k, v]) => {
+          ensureAttachmentSlots(v);
+          return [k, {
+            ...v,
+            attached: {
+              top: [...v.attached.top],
+              right: [...v.attached.right],
+              bottom: [...v.attached.bottom],
+              left: [...v.attached.left],
+            }
+          }];
+        }),
+        creationStack,
+        tilesCatalog,
+        fillers: [...fillers.values()], // export filler pairs too
+        fillerTiles: [...fillerTiles.entries()]
+      }, null, 2)], { type: "application/json" });
+      downloadBlob(blob, "boards.json");
+    }
+
+    function exportCSV() {
+      const lines = [];
+      for (const [k, v] of placement) {
+        lines.push(`# ${k}`);
+        for (let r = 0; r < v.h; r++) {
+          const row = v.tiles[r].map(cell => (cell ? `${cell.id}@${cell.rot}` : "")).join(",");
+          lines.push(row);
+        }
+        lines.push("");
+      }
+      lines.push(`# fillers: ${[...fillers.values()].join(";")}`);
+      lines.push(`# fillerTiles: ${[...fillerTiles.entries()].map(([p, t]) => `${p}:${t ? (t.id + "@" + t.rot) : ""}`).join(";")}`);
+      downloadBlob(new Blob([lines.join("\n")], { type: "text/csv" }), "boards.csv");
+    }
+
+    function downloadBlob(blob, filename) {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      URL.revokeObjectURL(a.href);
+      a.remove();
+    }
+
+    /* =========================
+       Wire-up & Init
+    ========================= */
+    catButtons.forEach(btn => {
+      btn.addEventListener("click", () => {
+        selectedCategory = btn.dataset.cat;
+        catButtons.forEach(b => b.classList.toggle("active", b === btn));
+        buildPalette();
+      });
+    });
+
+    // Free-look panning
+    document.querySelector('.boards-viewport').addEventListener('mousedown', (e) => {
+      if (!isFreeLook || e.button !== 0) return;
+      const interactive = e.target.closest('.board-clear-btn, .zoom-controls button');
+      if (interactive) return;
+      isPanning = true;
+      panStart = { x: e.clientX, y: e.clientY };
+      const { x, y } = getPanVars();
+      panStartVars = { x, y };
+      const vp = document.querySelector('.boards-viewport');
+      vp.classList.add('dragging');
+      e.preventDefault();
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!isPanning) return;
+      const dx = e.clientX - panStart.x;
+      const dy = e.clientY - panStart.y;
+      setPanVars(panStartVars.x + dx, panStartVars.y + dy);
+    });
+    window.addEventListener('mouseup', () => {
+      if (!isPanning) return;
+      isPanning = false;
+      const vp = document.querySelector('.boards-viewport');
+      vp.classList.remove('dragging');
+    });
+
+    document.getElementById("save").onclick = save;
+    document.getElementById("load").onclick = load;
+    document.getElementById("clear").onclick = clearAll;
+    document.getElementById("exportJson").onclick = exportJSON;
+    document.getElementById("exportCsv").onclick = exportCSV;
+
+    buildPalette();
+    buildBoardPalette();
+    buildStartBoardPalette();
+    updateFreeLookMode();
+
+    // Initial origin board
+    addBoardAt(0, 0);
+    setActiveBoard("0,0");
+
+    // Fit & center
+    scheduleFitAndCenter();
+    window.addEventListener("mouseup", () => { isDragging = false; lastPaintKey = null; });
+    const vp = document.querySelector('.boards-viewport');
+    if (vp) new ResizeObserver(() => scheduleFitAndCenter()).observe(vp);
+    new ResizeObserver(() => scheduleFitAndCenter()).observe(boardsGrid);
+    window.addEventListener('resize', () => scheduleFitAndCenter());
+  </script>
+</body>
+
 </html>
