@@ -131,6 +131,35 @@
         gap: 8px;
       }
 
+      .palette-panel {
+        position: relative;
+      }
+
+      .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+      }
+
+      .view-btn {
+        background: #232747;
+        color: var(--fg);
+        border: 1px solid #2f3563;
+        padding: 6px 10px;
+        border-radius: 999px;
+        cursor: pointer;
+        font-size: 12px;
+      }
+
+      .view-btn:hover {
+        border-color: var(--accent);
+      }
+
+      .view-btn.active {
+        border-color: var(--accent);
+      }
+
       .tile {
         height: 52px;
         border-radius: 10px;
@@ -165,6 +194,21 @@
         color: var(--muted);
       }
 
+      .tile-disabled {
+        opacity: 0.25;
+      }
+
+      .cell-spacer {
+        visibility: hidden;
+      }
+
+      .cell-hidden {
+        visibility: hidden;
+        pointer-events: none;
+        border: none;
+        background: transparent;
+      }
+
       .glyph {
         font-weight: 800;
         font-size: 22px;
@@ -193,14 +237,7 @@
 
       /* Zoom controls */
       .zoom-controls {
-        position: absolute;
-        top: 8px;
-        right: 12px;
-        z-index: 10;
-        display: flex;
-        gap: 8px;
-        contain: layout paint;
-        pointer-events: auto;
+        display: none;
       }
 
       .zoom-btn {
@@ -239,6 +276,33 @@
         transform-origin: top left;
         display: inline-block;
         min-width: 0;
+      }
+
+      .boards-top-controls {
+        position: absolute;
+        top: 8px;
+        right: 12px;
+        z-index: 15;
+        display: flex;
+        gap: 8px;
+      }
+
+      .view-btn {
+        background: #232747;
+        color: var(--fg);
+        border: 1px solid #2f3563;
+        padding: 6px 10px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+
+      .view-btn:hover {
+        border-color: var(--accent);
+      }
+
+      .view-btn.active {
+        border-color: var(--accent);
       }
 
       /* =========================
@@ -304,14 +368,6 @@
 
       #boardsGrid {
         position: relative;
-      }
-
-      .board.filler-board {
-        position: absolute;
-        transform: translate(-50%, -50%);
-        /* we will position by center */
-        z-index: 2;
-        pointer-events: auto;
       }
 
       /* Cells */
@@ -509,7 +565,6 @@
         <button id="save">💾 Save</button>
         <button id="load">📥 Load</button>
         <button id="clear">🗑️ Clear All</button>
-        <button id="toggleView">👁 View</button>
       </div>
     </header>
 
@@ -547,17 +602,15 @@
           <b>−</b> on the connected side.<br />
           Removing a <b>3×3/5×5</b> with thin connectors will prompt and remove
           the connected thin pieces too.<br />
-          Connecting a <b>5×5</b> to a <b>3×3</b> auto‑creates a virtual
-          <b>1×1 filler</b> (counted in totals, not selectable).
+          Connecting a <b>5×5</b> to a <b>3×3</b> auto-creates a
+          <b>1×1 connector</b> (paintable & removable).
         </div>
       </section>
 
       <!-- Boards -->
       <section class="panel boards-wrap">
-        <div class="zoom-controls">
-          <button class="zoom-btn" id="zoomOut">➖</button>
-          <button class="zoom-btn" id="zoomIn">➕</button>
-          <button class="zoom-btn" id="zoomReset">🔄</button>
+        <div class="boards-top-controls">
+          <button id="toggleView" class="view-btn">👁 View</button>
         </div>
 
         <div class="boards-viewport">
@@ -588,7 +641,7 @@
         >
           <div>Total tiles: <b id="totalTiles">0</b></div>
           <div>Total boards: <b id="totalBoards">0</b></div>
-          <div>Fillers (1×1): <b id="totalFillers">0</b></div>
+          <div>Connectors (1×1): <b id="totalConnectors">0</b></div>
         </div>
       </aside>
     </main>
@@ -601,7 +654,7 @@
     <script>
       /* =========================
        Config & Constants
-    ========================= */
+      ========================= */
       const STORAGE_KEY = "tilePlanner.coords.v10";
       const FIT_MIN_ZOOM = 0.3;
       const FIT_MAX_ZOOM = 3;
@@ -613,6 +666,14 @@
         { id: "b1x5", w: 1, h: 5, name: "1×5" },
         { id: "b5x1", w: 5, h: 1, name: "5×1" },
         { id: "b5x5", w: 5, h: 5, name: "5×5" },
+        {
+          id: "b3x3_cross",
+          w: 5,
+          h: 5,
+          name: "3×3 Cross",
+          coreSize: 3,
+          internal: true,
+        },
       ];
       const CATEGORY_LABELS = {
         ground: "Ground",
@@ -624,7 +685,7 @@
 
       /* =========================
        Tile Catalog + Registry
-    ========================= */
+      ========================= */
       const CATEGORY_COLORS = {
         ground: "#26a269",
         road: "#f38ba8",
@@ -799,15 +860,10 @@
 
       const placement = new Map(); // "x,y" -> { id, w, h, tiles[h][w], attached: {top/right/bottom/left:Set} }
       const creationStack = [];
-      const fillerTiles = new Map();
-
-      // Virtual fillers: set of pair keys "minKey|maxKey" for connected 5×5↔3×3
-      const fillers = new Set();
-      const pairKey = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 
       /* =========================
        State
-    ========================= */
+      ========================= */
 
       let nextBoardId = 1;
       let selectedCategory = "ground";
@@ -837,7 +893,7 @@
 
       /* =========================
        DOM Refs
-    ========================= */
+      ========================= */
       const paletteEl = document.getElementById("palette");
       const boardsGrid = document.getElementById("boardsGrid");
       const countsEl = document.getElementById("counts");
@@ -845,7 +901,7 @@
 
       /* =========================
        Helpers
-    ========================= */
+      ========================= */
       const keyOf = (x, y) => `${x},${y}`;
       const parseKey = (k) => k.split(",").map(Number);
       const byId = (id) => tilesById.get(id);
@@ -854,6 +910,11 @@
         return Array.from({ length: h }, () =>
           Array.from({ length: w }, () => null)
         );
+      }
+
+      function crossMask5(x, y) {
+        // Manhattan distance from center (2,2)
+        return Math.abs(x - 2) + Math.abs(y - 2) <= 2;
       }
 
       // Attachment tracking
@@ -902,11 +963,6 @@
       }
       function isSquare5(b) {
         return b.w === 5 && b.h === 5;
-      }
-
-      // Filler qualification: connected squares 5×5 ↔ 3×3
-      function qualifiesFiller(a, b) {
-        return (isSquare5(a) && isSquare3(b)) || (isSquare3(a) && isSquare5(b));
       }
 
       // Orientation allowance for the shape being added
@@ -1031,186 +1087,8 @@
 
         if (toDelete.length > 0) {
           for (const k of toDelete) deleteBoardInternal(k);
-          if (typeof recomputeFillers === "function") recomputeFillers();
         }
       }
-
-      function renderFillerCell(pair, cellEl) {
-        const content = cellEl.firstChild;
-        content.innerHTML = "";
-        const data = fillerTiles.get(pair) || null;
-
-        if (!data) {
-          cellEl.dataset.empty = "true";
-          // Empty cell uses dashed style; still show rotation dot for consistency
-          const dot = document.createElement("div");
-          dot.className = "rotation-dot";
-          content.appendChild(dot);
-          return;
-        }
-
-        cellEl.dataset.empty = "false";
-        const tile = byId(data.id);
-        if (!tile) return;
-
-        if (tile.img) {
-          const img = document.createElement("img");
-          img.src = tile.img;
-          img.alt = tile.name;
-          Object.assign(img.style, {
-            width: "100%",
-            height: "100%",
-            objectFit: "contain",
-            transform: `rotate(${data.rot}deg)`,
-          });
-          content.appendChild(img);
-        } else {
-          const glyph = document.createElement("span");
-          glyph.className = "glyph";
-          glyph.textContent = tile.glyph ?? "•";
-          glyph.style.color = tile.color ?? "#ddd";
-          glyph.style.transform = `rotate(${data.rot}deg)`;
-          const dot = document.createElement("div");
-          dot.className = "rotation-dot";
-          dot.style.transform = `rotate(${data.rot}deg)`;
-          content.appendChild(glyph);
-          content.appendChild(dot);
-        }
-      }
-
-      function paintFiller(pair) {
-        if (!selectedTileId) return;
-        if (fillerTiles.get(pair)) return;
-        const key = `${pair}_paint_${selectedTileId}`;
-        if (lastPaintKey === key) return;
-        fillerTiles.set(pair, { id: selectedTileId, rot: 0 });
-        lastPaintKey = key;
-        updateCounts();
-      }
-
-      function eraseFiller(pair) {
-        if (!fillerTiles.get(pair)) return;
-        const key = `${pair}_erase`;
-        if (lastPaintKey === key) return;
-        fillerTiles.set(pair, null);
-        lastPaintKey = key;
-        updateCounts();
-      }
-
-      function rotateFiller(pair) {
-        const cell = fillerTiles.get(pair);
-        if (!cell) return;
-        const tile = byId(cell.id);
-        if (!tile || !tile.rotatable) return;
-        cell.rot = (cell.rot + 90) % 360;
-        fillerTiles.set(pair, cell);
-        updateCounts();
-      }
-
-      function renderFillerBoards() {
-        const grid = document.getElementById("boardsGrid");
-        if (!grid) return;
-
-        // Remove any previous filler boards
-        grid.querySelectorAll(".filler-board").forEach((e) => e.remove());
-
-        // Each filler pair key is "minKey\nmaxKey"
-        for (const pair of fillers.values()) {
-          const [k1, k2] = pair.split("\n");
-          const el1 = grid.querySelector(`[data-coord="${k1}"]`);
-          const el2 = grid.querySelector(`[data-coord="${k2}"]`);
-          if (!el1 || !el2) continue;
-
-          // Midpoint between board centers (robust to zoom/pan/transforms)
-          const gridRect = grid.getBoundingClientRect();
-          const r1 = el1.getBoundingClientRect();
-          const r2 = el2.getBoundingClientRect();
-
-          // centers relative to the grid's coordinate space
-          const cx1 = (r1.left + r1.right) / 2 - gridRect.left;
-          const cy1 = (r1.top + r1.bottom) / 2 - gridRect.top;
-          const cx2 = (r2.left + r2.right) / 2 - gridRect.left;
-          const cy2 = (r2.top + r2.bottom) / 2 - gridRect.top;
-
-          const mx = (cx1 + cx2) / 2;
-          const my = (cy1 + cy2) / 2;
-
-          // Build a full-looking board card (1×1 inner grid)
-          const boardEl = document.createElement("div");
-          boardEl.className = "board filler-board";
-          boardEl.style.left = `${mx}px`;
-          boardEl.style.top = `${my}px`;
-
-          const gridEl = document.createElement("div");
-          gridEl.className = "board-grid";
-          gridEl.style.gridTemplateColumns = `repeat(1, var(--cell))`;
-
-          // Single cell
-          const cellEl = document.createElement("div");
-          cellEl.className = "cell";
-
-          const content = document.createElement("div");
-          content.className = "content";
-          cellEl.appendChild(content);
-
-          // Make the filler cell interactive (paint/erase/rotate)
-          let startPos = null;
-          cellEl.addEventListener("mousedown", (e) => {
-            e.preventDefault();
-            if (isFreeLook && e.button === 0) return; // honor free-look
-            startPos = { x: e.clientX, y: e.clientY };
-
-            const hasTile = !!fillerTiles.get(pair);
-            if (e.button === 2) {
-              dragMode = "erase";
-              isDragging = true;
-              eraseFiller(pair);
-              renderFillerCell(pair, cellEl);
-              return;
-            }
-            if (!hasTile) {
-              dragMode = "paint";
-              isDragging = true;
-              paintFiller(pair);
-              renderFillerCell(pair, cellEl);
-            } else {
-              isDragging = false;
-            }
-          });
-          cellEl.addEventListener("mouseenter", () => {
-            if (!isDragging || isFreeLook) return;
-            if (dragMode === "paint") {
-              paintFiller(pair);
-              renderFillerCell(pair, cellEl);
-            } else if (dragMode === "erase") {
-              eraseFiller(pair);
-              renderFillerCell(pair, cellEl);
-            }
-          });
-          cellEl.addEventListener("mouseup", (e) => {
-            const endPos = { x: e.clientX, y: e.clientY };
-            const moved =
-              !startPos ||
-              Math.hypot(endPos.x - startPos.x, endPos.y - startPos.y) > 2;
-            const data = fillerTiles.get(pair);
-            if (e.button === 0 && !isDragging && data && !moved) {
-              rotateFiller(pair);
-              renderFillerCell(pair, cellEl);
-            }
-            isDragging = false;
-            lastPaintKey = null;
-          });
-          cellEl.addEventListener("contextmenu", (e) => e.preventDefault());
-
-          gridEl.appendChild(cellEl);
-          boardEl.appendChild(gridEl);
-          grid.appendChild(boardEl);
-
-          // Initial render of cell content
-          renderFillerCell(pair, cellEl);
-        }
-      }
-
       function isInteractionBlocked() {
         return isViewMode === true;
       }
@@ -1222,9 +1100,88 @@
           .forEach((el) => el.classList.remove("selected"));
       }
 
+      function normalizeAdjacencyClosure(startKeys) {
+        const queue = [...startKeys];
+        const seen = new Set(queue);
+
+        while (queue.length) {
+          const k = queue.shift();
+          if (k === "0,0") continue;
+
+          const bd = placement.get(k);
+          if (!bd) continue;
+
+          // Only 3×3 boards can grow poles
+          if (!(bd.w === 3 && bd.h === 3)) continue;
+
+          const [x, y] = parseKey(k);
+
+          // Check if this 3×3 touches at least one 5×5
+          let touches5 = false;
+          for (const [dx, dy] of [
+            [0, -1],
+            [1, 0],
+            [0, 1],
+            [-1, 0],
+          ]) {
+            const nk = keyOf(x + dx, y + dy);
+            if (!placement.has(nk)) continue;
+
+            const nb = placement.get(nk);
+            if (nb.w === 5 && nb.h === 5) {
+              touches5 = true;
+              break;
+            }
+          }
+
+          if (!touches5) continue;
+
+          // Grow poles on ALL four sides
+          const poleOffsets = [
+            [0, -1], // top
+            [1, 0], // right
+            [0, 1], // bottom
+            [-1, 0], // left
+          ];
+
+          for (const [ox, oy] of poleOffsets) {
+            const pk = keyOf(x + ox, y + oy);
+            if (placement.has(pk)) continue;
+
+            const pole = {
+              id: nextBoardId++,
+              w: 1,
+              h: 1,
+              tiles: createEmptyBoard(1, 1),
+            };
+            ensureAttachmentSlots(pole);
+            placement.set(pk, pole);
+            creationStack.push(pk);
+
+            // Propagate: poles may affect neighbors
+            for (const kk of [pk, k]) {
+              if (!seen.has(kk)) {
+                seen.add(kk);
+                queue.push(kk);
+              }
+            }
+          }
+        }
+      }
+
+      function isPlayableCell(board, x, y) {
+        if (board.id !== "b3x3_cross") return true;
+        return crossMask5(x, y);
+      }
+
+      function cellExists(board, x, y) {
+        if (board.id !== "b3x3_cross") return true;
+        return crossMask5(x, y);
+      }
+
       /* =========================
        Build UI (palettes)
-    ========================= */
+      ========================= */
       function buildPalette() {
         const items = tilesCatalog.filter(
           (t) => t.category === selectedCategory
@@ -1270,7 +1227,7 @@
       function buildBoardPalette() {
         const wrap = document.getElementById("boardPalette");
         wrap.innerHTML = "";
-        BOARD_SHAPES.forEach((shape) => {
+        BOARD_SHAPES.filter((shape) => !shape.internal).forEach((shape) => {
           const btn = document.createElement("button");
           btn.className =
             "tile" + (shape.id === selectedBoardShape.id ? " selected" : "");
@@ -1328,7 +1285,7 @@
 
       /* =========================
        Placement Ops
-    ========================= */
+      ========================= */
       function addBoardAt(x, y) {
         const k = keyOf(x, y);
         if (placement.has(k)) return;
@@ -1412,10 +1369,11 @@
           bd.attached[sideOnNew].add(nk);
         }
 
-        // Recompute fillers (new connections may qualify)
-        recomputeFillers();
-
         setActiveBoard(k);
+        normalizeAdjacencyAt(k);
+        for (const nk of getNeighborKeys(k)) {
+          normalizeAdjacencyAt(nk);
+        }
         manualZoomOverride = false;
         renderBoards();
       }
@@ -1451,9 +1409,6 @@
           if (sideOnNeighbor && nb.attached[sideOnNeighbor]) {
             nb.attached[sideOnNeighbor].delete(k);
           }
-          // Remove any filler that involves (k, nk)
-          fillers.delete(pairKey(k, nk));
-          fillerTiles.delete(pairKey(k, nk));
         }
 
         // Remove the board
@@ -1530,32 +1485,8 @@
       }
 
       /* =========================
-       Fillers recompute
-    ========================= */
-      function recomputeFillers() {
-        fillers.clear();
-        for (const [k, bd] of placement.entries()) {
-          ensureAttachmentSlots(bd);
-          for (const side of ["top", "right", "bottom", "left"]) {
-            for (const nk of bd.attached[side]) {
-              if (!placement.has(nk)) continue;
-              const nb = placement.get(nk);
-              if (qualifiesFiller(bd, nb)) {
-                fillers.add(pairKey(k, nk));
-              }
-            }
-          }
-        }
-        for (const key of [...fillerTiles.keys()]) {
-          if (!fillers.has(key)) fillerTiles.delete(key);
-        }
-
-        updateCounts(); // keep totals fresh
-      }
-
-      /* =========================
        Painting / Cells
-    ========================= */
+      ========================= */
       function setCell(k, r, c, id, rot) {
         const bd = placement.get(k);
         bd.tiles[r][c] = { id, rot, high: false };
@@ -1593,15 +1524,26 @@
         clearCell(k, r, c);
         lastPaintKey = key;
       }
+
       function renderCellContent(k, r, c, cellEl) {
         const content = cellEl.firstChild;
         content.innerHTML = "";
+
         const bd = placement.get(k);
+        const playable = isPlayableCell(bd, c, r);
+        const exists = cellExists(bd, c, r);
+        cellEl.classList.toggle("cell-hidden", !exists);
+
+        // ✅ ALWAYS mark disabled state first
+        cellEl.classList.toggle("tile-disabled", !playable);
+
         const data = bd.tiles[r][c];
+
+        // ✅ Still set empty/highground flags correctly
         if (!data) {
           cellEl.dataset.empty = "true";
           cellEl.classList.remove("highground");
-          return;
+          return; // safe now
         }
 
         cellEl.dataset.empty = "false";
@@ -1627,20 +1569,30 @@
           glyph.textContent = tile.glyph;
           glyph.style.color = tile.color;
           glyph.style.transform = `rotate(${data.rot}deg)`;
+
           const dot = document.createElement("div");
           dot.className = "rotation-dot";
           dot.style.transform = `rotate(${data.rot}deg)`;
+
           content.appendChild(glyph);
           content.appendChild(dot);
         }
       }
+
       function rerenderCellByCoordKey(k, r, c) {
-        const bd = placement.get(k);
-        if (!bd) return;
         const boardEl = boardsGrid.querySelector(`[data-coord="${k}"]`);
         if (!boardEl) return;
+
+        const bd = placement.get(k);
+        if (!bd) return;
+
         const grid = boardEl.querySelector(".board-grid");
-        const cellEl = grid.children[r * bd.w + c];
+        if (!grid) return;
+
+        const index = r * bd.w + c;
+        const cellEl = grid.children[index];
+        if (!cellEl) return;
+
         renderCellContent(k, r, c, cellEl);
       }
 
@@ -1648,7 +1600,7 @@
        Side handles (+ / −)
        - Thin boards: show ONLY "−" on connected side(s), never "+";
        - Squares: normal +/−, single minus per connection (no overlaps).
-    ========================= */
+      ========================= */
       function renderSideHandles(boardEl, k, bd) {
         const [x, y] = parseKey(k);
         const sides = [
@@ -1727,22 +1679,26 @@
 
       /* =========================
        Grid Render (with side handles)
-    ========================= */
+      ========================= */
       function renderBoards() {
         boardsGrid.innerHTML = "";
         const keys = [...placement.keys()];
         if (keys.length === 0) return;
+
         const coords = keys.map(parseKey);
         const xs = coords.map(([x]) => x);
         const ys = coords.map(([, y]) => y);
+
         const minX = Math.min(...xs),
           maxX = Math.max(...xs);
         const minY = Math.min(...ys),
           maxY = Math.max(...ys);
+
         const leftCols = Math.max(0, -minX);
         const rightCols = Math.max(0, maxX);
         const topRows = Math.max(0, -minY);
         const bottomRows = Math.max(0, maxY);
+
         const totalCols = leftCols + 1 + rightCols;
         const totalRows = topRows + 1 + bottomRows;
 
@@ -1750,6 +1706,7 @@
 
         for (let rowIndex = 0; rowIndex < totalRows; rowIndex++) {
           const worldY = rowIndex - topRows;
+
           for (let colIndex = 0; colIndex < totalCols; colIndex++) {
             const worldX = colIndex - leftCols;
             const k = keyOf(worldX, worldY);
@@ -1763,13 +1720,12 @@
 
             const bd = placement.get(k);
 
-            // Board card
+            // --- Board card ---
             const boardEl = document.createElement("div");
             boardEl.className = "board";
             boardEl.dataset.coord = k;
             boardsGrid.appendChild(boardEl);
 
-            // Click to set active (for highlight only)
             boardEl.addEventListener("click", () => setActiveBoard(k));
 
             // Clear tiles button
@@ -1784,36 +1740,44 @@
             });
             boardEl.appendChild(clearBtn);
 
-            // Inner grid for cells
+            // --- Inner grid ---
             const grid = document.createElement("div");
             grid.className = "board-grid";
             grid.style.gridTemplateColumns = `repeat(${bd.w}, var(--cell))`;
             boardEl.appendChild(grid);
 
-            // Cells
+            // --- Cells ---
             for (let r = 0; r < bd.h; r++) {
               for (let c = 0; c < bd.w; c++) {
                 const cellEl = document.createElement("div");
                 cellEl.className = "cell";
                 cellEl.dataset.empty = bd.tiles[r][c] ? "false" : "true";
+
                 const content = document.createElement("div");
                 content.className = "content";
                 cellEl.appendChild(content);
+
                 const dot = document.createElement("div");
                 dot.className = "rotation-dot";
                 content.appendChild(dot);
 
+                const exists = cellExists(bd, c, r);
+                const playable = isPlayableCell(bd, c, r);
+
+                cellEl.classList.toggle("cell-hidden", !exists);
+                cellEl.classList.toggle("tile-disabled", !playable);
+
                 let startPos = null;
+
                 cellEl.addEventListener("mousedown", (e) => {
+                  if (!playable || isCorner) return;
                   if (isInteractionBlocked()) return;
 
                   if (isHighgroundMode) {
                     e.preventDefault();
-
                     dragMode =
                       e.button === 2 ? "highground-erase" : "highground-paint";
                     isDragging = true;
-
                     setHighground(k, r, c, dragMode === "highground-paint");
                     lastPaintKey = `${k}_${r}_${c}_${dragMode}`;
                     return;
@@ -1844,13 +1808,13 @@
                 });
 
                 cellEl.addEventListener("mouseenter", () => {
+                  if (!playable || isCorner) return;
                   if (isInteractionBlocked()) return;
                   if (!isDragging || isFreeLook) return;
 
                   if (isHighgroundMode) {
                     const key = `${k}_${r}_${c}_${dragMode}`;
                     if (lastPaintKey === key) return;
-
                     setHighground(k, r, c, dragMode === "highground-paint");
                     lastPaintKey = key;
                     return;
@@ -1861,29 +1825,19 @@
                 });
 
                 cellEl.addEventListener("mouseup", (e) => {
+                  if (!playable || isCorner) return;
                   if (isInteractionBlocked()) return;
-
-                  if (isHighgroundMode) {
-                    isDragging = false;
-                    lastPaintKey = null;
-                    return;
-                  }
 
                   const endPos = { x: e.clientX, y: e.clientY };
                   const moved =
                     !startPos ||
                     Math.hypot(endPos.x - startPos.x, endPos.y - startPos.y) >
                       2;
+
                   const data = bd.tiles[r][c];
 
                   if (e.button === 0 && !isDragging && data && !moved) {
-                    if (isHighgroundMode) {
-                      data.high = !data.high;
-                      rerenderCellByCoordKey(k, r, c);
-                      updateCounts();
-                    } else {
-                      rotateCell(k, r, c);
-                    }
+                    rotateCell(k, r, c);
                   }
 
                   isDragging = false;
@@ -1893,30 +1847,78 @@
                 cellEl.addEventListener("contextmenu", (e) =>
                   e.preventDefault()
                 );
+
                 grid.appendChild(cellEl);
                 renderCellContent(k, r, c, cellEl);
               }
             }
 
-            // Side handles (+ / −)
+            // --- Side handles (FIXED SCOPE) ---
             ensureAttachmentSlots(bd);
             renderSideHandles(boardEl, k, bd);
 
-            // Highlight active
-            if (activeBoardCoord === k) boardEl.classList.add("active");
+            if (activeBoardCoord === k) {
+              boardEl.classList.add("active");
+            }
+          }
+        }
+      }
+
+      updateCounts();
+      scheduleFitAndCenter();
+
+      function upgrade3x3ToCross(k) {
+        const old = placement.get(k);
+        if (!old || old.w !== 3 || old.h !== 3) return;
+
+        const cross = {
+          id: "b3x3_cross",
+          w: 5,
+          h: 5,
+          tiles: createEmptyBoard(5, 5),
+        };
+        ensureAttachmentSlots(cross);
+
+        // Copy old 3×3 tiles into the center of the 5×5
+        for (let y = 0; y < 3; y++) {
+          for (let x = 0; x < 3; x++) {
+            cross.tiles[y + 1][x + 1] = old.tiles[y][x];
           }
         }
 
-        // After layout, recompute fillers to keep totals correct
-        recomputeFillers();
-        updateCounts();
-        renderFillerBoards();
-        scheduleFitAndCenter();
+        placement.set(k, cross);
+      }
+
+      function normalizeAdjacencyAt(k) {
+        const bd = placement.get(k);
+        if (!bd) return;
+
+        // Only upgrade plain 3×3 boards
+        if (bd.w !== 3 || bd.h !== 3 || bd.id === "b3x3_cross") return;
+
+        const [x, y] = parseKey(k);
+
+        // Check all four sides for a 5×5 neighbor
+        for (const [dx, dy] of [
+          [0, -1], // top
+          [1, 0], // right
+          [0, 1], // bottom
+          [-1, 0], // left
+        ]) {
+          const nk = keyOf(x + dx, y + dy);
+          if (!placement.has(nk)) continue;
+
+          const nb = placement.get(nk);
+          if (nb.w === 5 && nb.h === 5) {
+            upgrade3x3ToCross(k);
+            return; // one 5×5 is enough
+          }
+        }
       }
 
       /* =========================
        Counts
-    ========================= */
+      ========================= */
       function updateCounts() {
         if (!countsEl) return;
         const totals = new Map();
@@ -1928,12 +1930,6 @@
               if (cell) {
                 totals.set(cell.id, (totals.get(cell.id) ?? 0) + 1);
               }
-        }
-
-        // NEW: filler 1×1 tiles
-        for (const v of fillerTiles.values()) {
-          if (!v) continue;
-          totals.set(v.id, (totals.get(v.id) ?? 0) + 1);
         }
 
         const groups = { ground: [], road: [], wall: [], misc: [] };
@@ -1974,18 +1970,16 @@
           countsEl.appendChild(group);
         });
 
-        // Global counters (you already include fillers.size in Total boards)
+        // Global counters
         document.getElementById("totalTiles").textContent = [
           ...totals.values(),
         ].reduce((a, b) => a + b, 0);
-        document.getElementById("totalBoards").textContent =
-          placement.size + fillers.size;
-        document.getElementById("totalFillers").textContent = fillers.size;
+        document.getElementById("totalBoards").textContent = placement.size;
       }
 
       /* =========================
        Zoom / Pan
-    ========================= */
+      ========================= */
       function applyZoom() {
         document.documentElement.style.setProperty("--zoom", zoomLevel);
         const vp = document.querySelector(".boards-viewport");
@@ -1995,20 +1989,46 @@
         }
         centerOriginBoard();
       }
-      document.getElementById("zoomIn").onclick = () => {
-        manualZoomOverride = true;
-        zoomLevel = clamp(zoomLevel + 0.1, FIT_MIN_ZOOM, FIT_MAX_ZOOM);
-        applyZoom();
-      };
-      document.getElementById("zoomOut").onclick = () => {
-        manualZoomOverride = true;
-        zoomLevel = clamp(zoomLevel - 0.1, FIT_MIN_ZOOM, FIT_MAX_ZOOM);
-        applyZoom();
-      };
-      document.getElementById("zoomReset").onclick = () => {
-        manualZoomOverride = false;
-        scheduleFitAndCenter();
-      };
+
+      const ZOOM_STEP = 0.1;
+
+      const viewportEl = document.querySelector(".boards-viewport");
+
+      if (viewportEl) {
+        viewportEl.addEventListener(
+          "wheel",
+          (e) => {
+            // prevent page scroll
+            e.preventDefault();
+
+            manualZoomOverride = true;
+
+            const oldZoom = zoomLevel;
+            const delta = Math.sign(e.deltaY);
+
+            zoomLevel = clamp(
+              zoomLevel - delta * ZOOM_STEP,
+              FIT_MIN_ZOOM,
+              FIT_MAX_ZOOM
+            );
+
+            if (zoomLevel === oldZoom) return;
+
+            // Zoom towards cursor
+            const rect = viewportEl.getBoundingClientRect();
+            const cx = e.clientX - rect.left;
+            const cy = e.clientY - rect.top;
+
+            const pan = getPanVars();
+            const scale = zoomLevel / oldZoom;
+
+            setPanVars(cx - scale * (cx - pan.x), cy - scale * (cy - pan.y));
+
+            document.documentElement.style.setProperty("--zoom", zoomLevel);
+          },
+          { passive: false }
+        );
+      }
 
       function zoomToFit() {
         if (manualZoomOverride) return;
@@ -2069,7 +2089,7 @@
 
       /* =========================
        Save / Load / Export
-    ========================= */
+      ========================= */
       function save() {
         const boards = [...placement.entries()].map(([k, v]) => {
           ensureAttachmentSlots(v);
@@ -2090,7 +2110,6 @@
           placement: boards,
           creationStack,
           selectedCategory,
-          fillerTiles: [...fillerTiles.entries()],
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         alert("Saved.");
@@ -2124,11 +2143,6 @@
           b.classList.toggle("active", b.dataset.cat === selectedCategory)
         );
         buildPalette();
-
-        fillerTiles.clear();
-        for (const [pair, value] of data.fillerTiles ?? [])
-          fillerTiles.set(pair, value);
-
         renderBoards();
         alert("Loaded.");
       }
@@ -2137,8 +2151,6 @@
         if (!confirm("Clear ALL boards?")) return;
         placement.clear();
         creationStack.length = 0;
-        fillers.clear();
-        fillerTiles.clear();
         addBoardAt(0, 0); // origin uses selectedStartingShape
         renderBoards();
       }
@@ -2165,8 +2177,6 @@
                 }),
                 creationStack,
                 tilesCatalog,
-                fillers: [...fillers.values()], // export filler pairs too
-                fillerTiles: [...fillerTiles.entries()],
               },
               null,
               2
@@ -2253,12 +2263,6 @@
           }
           lines.push("");
         }
-        lines.push(`# fillers: ${[...fillers.values()].join(";")}`);
-        lines.push(
-          `# fillerTiles: ${[...fillerTiles.entries()]
-            .map(([p, t]) => `${p}:${t ? t.id + "@" + t.rot : ""}`)
-            .join(";")}`
-        );
         downloadBlob(
           new Blob([lines.join("\n")], { type: "text/csv" }),
           "boards.csv"
@@ -2277,7 +2281,7 @@
 
       /* =========================
        Wire-up & Init
-    ========================= */
+      ========================= */
       catButtons.forEach((btn) => {
         btn.addEventListener("click", () => {
           selectedCategory = btn.dataset.cat;
@@ -2365,10 +2369,6 @@
 
       // Fit & center
       scheduleFitAndCenter();
-      window.addEventListener("mouseup", () => {
-        isDragging = false;
-        lastPaintKey = null;
-      });
       const vp = document.querySelector(".boards-viewport");
       if (vp) new ResizeObserver(() => scheduleFitAndCenter()).observe(vp);
       new ResizeObserver(() => scheduleFitAndCenter()).observe(boardsGrid);
